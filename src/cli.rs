@@ -49,7 +49,7 @@ pub enum Commands {
     Weight(WeightArgs),
     /// Exercise diary
     Exercise(ExerciseArgs),
-    /// Water tracker
+    /// Water tracker (requires FatSecret Premium)
     Water(WaterArgs),
     /// Saved meals
     Meals(MealArgs),
@@ -181,7 +181,7 @@ pub enum DiaryAction {
         #[arg(long, default_value_t = 1.0)]
         units: f64,
     },
-    /// Delete an entry by id; keep the add response (day output does not reliably expose entry IDs)
+    /// Delete an entry by id (see it in `diary day`)
     Rm {
         /// Entry id
         entry_id: i64,
@@ -246,9 +246,9 @@ pub struct WaterArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum WaterAction {
-    /// Show today's water entry
+    /// Show today's water entry (requires FatSecret Premium)
     Day,
-    /// Log water intake in ml
+    /// Log water intake in ml (requires FatSecret Premium)
     Log {
         /// Milliliters consumed
         ml: i64,

@@ -42,8 +42,9 @@ impl FsClient {
             .header("fs_app_version", &self.app.app_version)
             .header("app_version", &self.app.app_version)
             .header("device", "6")
-            .header("unit", "kj")
-            .header("Content-Type", "application/json");
+            .header("unit", "kj");
+        // No Content-Type here: reqwest `header()` appends while `.json()` /
+        // `.form()` only fill an absent value, so each body setter must own it.
         if let Some(id) = &self.app.device_id {
             req = req.header("c_desc", id);
         }
@@ -51,6 +52,34 @@ impl FsClient {
     }
     async fn post_json(&self, url: &str, body: &Value) -> Result<Value> {
         let req = self.authed(self.http.post(url))?.json(body);
+        self.finish(req).await
+    }
+
+    /// Legacy action-page write: the app POSTs `application/x-www-form-urlencoded`
+    /// bodies to `.aspx` pages (params in the body, not the query string).
+    /// Several action pages reject the same params over GET with `Unable to save`.
+    /// The body carries the app-equivalent prefix (`c_id/c_fl/c_s/c_d`, `dt`,
+    /// `app_version`, `unit`) ahead of the caller params.
+    async fn post_form(&self, url: &str, params: &[(&str, &str)]) -> Result<Value> {
+        let Some(t) = &self.creds else {
+            return Err(AppError::NotLoggedIn);
+        };
+        let mut body: Vec<(String, String)> = vec![
+            ("c_id".to_string(), t.server_id.to_string()),
+            ("c_fl".to_string(), "1".to_string()),
+            ("c_s".to_string(), t.secret_key.clone()),
+            ("c_d".to_string(), t.device_key.clone()),
+            (
+                "dt".to_string(),
+                crate::auth::device::today_days().to_string(),
+            ),
+            ("app_version".to_string(), self.app.app_version.clone()),
+            ("unit".to_string(), "kj".to_string()),
+        ];
+        for (k, v) in params {
+            body.push((k.to_string(), v.to_string()));
+        }
+        let req = self.authed(self.http.post(url))?.form(&body);
         self.finish(req).await
     }
 
@@ -76,9 +105,8 @@ impl FsClient {
         }
         self.finish(req.json(body)).await
     }
-
     /// Authed GET with the app query-string convention (`?k=v&...`,
-    /// RFC-3986-encoded). Used by legacy `.aspx` pages.
+    /// RFC-3986-encoded). Legacy `.aspx` reads; writes go via `post_form`.
     async fn get_query(&self, url: &str, query: &[(&str, &str)]) -> Result<Value> {
         let full = if query.is_empty() {
             url.to_string()
@@ -177,10 +205,12 @@ impl FsClient {
             .await
     }
 
-    /// Diary day: authed GET `RecipeJournalDayAndroidPage.aspx?fl=7`.
+    /// Diary day: POST `RecipeJournalDayAndroidPage.aspx` with `{fl: 7}`.
+    /// The app sends legacy reads as form POSTs with body credentials;
+    /// the same page over GET returns only the shell (`{dateint, guid}`).
     pub async fn diary_day(&self) -> Result<Value> {
         let url = format!("{}RecipeJournalDayAndroidPage.aspx", self.app.server_base);
-        self.get_query(&url, &[("fl", "7")]).await
+        self.post_form(&url, &[("fl", "7")]).await
     }
 
     /// Dietary-preference vote: `POST {food_vote_url}` with
@@ -353,7 +383,7 @@ impl FsClient {
             .await
     }
 
-    /// Saved meal create/edit: `SavedMealActionAndroidPage.aspx` with
+    /// Saved meal create/edit: POST `SavedMealActionAndroidPage.aspx` with
     /// `{action:save, mealid, title, description, mealtypes}` (mealid 0 to create).
     pub async fn meal_save(
         &self,
@@ -363,7 +393,7 @@ impl FsClient {
         meal_types: &str,
     ) -> Result<Value> {
         let url = self.legacy("SavedMealActionAndroidPage.aspx");
-        self.get_query(
+        self.post_form(
             &url,
             &[
                 ("action", "save"),
@@ -376,20 +406,20 @@ impl FsClient {
         .await
     }
 
-    /// Saved meal delete: `{action:delete, mealid}`.
+    /// Saved meal delete: POST `{action:delete, mealid}`.
     pub async fn meal_delete(&self, meal_id: i64) -> Result<Value> {
         let url = self.legacy("SavedMealActionAndroidPage.aspx");
-        self.get_query(
+        self.post_form(
             &url,
             &[("action", "delete"), ("mealid", &meal_id.to_string())],
         )
         .await
     }
 
-    /// Log a saved meal into the diary: `{action:add, mealid, meal}`.
+    /// Log a saved meal into the diary: POST `{action:add, mealid, meal}`.
     pub async fn meal_log(&self, meal_id: i64, meal: i64) -> Result<Value> {
         let url = self.legacy("SavedMealActionAndroidPage.aspx");
-        self.get_query(
+        self.post_form(
             &url,
             &[
                 ("action", "add"),
@@ -400,7 +430,7 @@ impl FsClient {
         .await
     }
 
-    /// Meal item save: `SavedMealItemActionAndroidPage.aspx` with
+    /// Meal item save: POST `SavedMealItemActionAndroidPage.aspx` with
     /// `{action:save, mealid, itemid, rid, entryname, portionid, portionamount}`.
     pub async fn meal_item_save(
         &self,
@@ -412,7 +442,7 @@ impl FsClient {
         units: f64,
     ) -> Result<Value> {
         let url = self.legacy("SavedMealItemActionAndroidPage.aspx");
-        self.get_query(
+        self.post_form(
             &url,
             &[
                 ("action", "save"),
@@ -427,10 +457,10 @@ impl FsClient {
         .await
     }
 
-    /// Meal item delete: `{action:delete, itemid}`.
+    /// Meal item delete: POST `{action:delete, itemid}`.
     pub async fn meal_item_delete(&self, item_id: i64) -> Result<Value> {
         let url = self.legacy("SavedMealItemActionAndroidPage.aspx");
-        self.get_query(
+        self.post_form(
             &url,
             &[("action", "delete"), ("itemid", &item_id.to_string())],
         )
@@ -472,7 +502,7 @@ impl FsClient {
         self.get_query(&url, &[]).await
     }
 
-    /// Exercise log: authed GET `ActivityEntryActionAndroidPage.aspx` with
+    /// Exercise log: POST `ActivityEntryActionAndroidPage.aspx` with
     /// `{action:increment, typeID, mins, [kCal], [description], fl:2}`.
     pub async fn exercise_log(
         &self,
@@ -501,7 +531,7 @@ impl FsClient {
             "{}ActivityEntryActionAndroidPage.aspx",
             self.app.server_base
         );
-        self.get_query(&url, &query).await
+        self.post_form(&url, &query).await
     }
 
     /// Water entry: authed GET `WaterTrackingActionAndroidPage.aspx` with
@@ -518,14 +548,14 @@ impl FsClient {
         .await
     }
 
-    /// Water log: `{action:savewater, consume: ml, type: 1 (delta),
+    /// Water log: POST `{action:savewater, consume: ml, type: 1 (delta),
     /// goal: daily ml, dateInt, fl: 2}`.
     pub async fn water_log(&self, ml: i64, goal_ml: i64, date_int: i64) -> Result<Value> {
         let url = format!(
             "{}WaterTrackingActionAndroidPage.aspx",
             self.app.server_base
         );
-        self.get_query(
+        self.post_form(
             &url,
             &[
                 ("action", "savewater"),

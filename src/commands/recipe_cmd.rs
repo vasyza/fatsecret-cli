@@ -1,7 +1,7 @@
 use crate::api::FsClient;
 use crate::cli::{OutputFormat, RecipesAction, RecipesArgs};
 use crate::error::Result;
-use crate::output::{emit, render_food_get, render_recipes};
+use crate::output::{emit, render_food_get, render_recipes, render_scalars};
 
 pub async fn run(client: &FsClient, format: OutputFormat, args: RecipesArgs) -> Result<()> {
     match args.action {
@@ -27,7 +27,8 @@ pub async fn run(client: &FsClient, format: OutputFormat, args: RecipesArgs) -> 
         }
         RecipesAction::CookbookCount { market } => {
             let v = client.cookbook_count(&market).await?;
-            emit(format, "cookbook count (see --format json)", "", &v)
+            let (human, plain) = render_scalars(&v, "cookbook count (see --format json)");
+            emit(format, human.trim_end(), plain.trim_end(), &v)
         }
     }
 }

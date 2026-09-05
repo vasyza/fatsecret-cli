@@ -95,8 +95,8 @@ The status below distinguishes implemented commands from observed live behavior.
 | Food diary | Current-day read, add, delete by known ID | Add/delete have been checked live, including mobile-app visibility. No reliable entry-ID listing, historical day lookup, month view, or copy command. Date caveats apply. |
 | Weight | Record current weight and goal | A write was accepted live. No history or date selector. |
 | Exercise | Current day, activity types, activity logging | Reads have been checked live. Logging was rejected by the server. |
-| Water | Current-day read and intake logging | Both operations were rejected in live checks. |
-| Saved meals | List, details, quick picks, meal/item writes, log to diary | Reads have been checked live. Writes returned `Unable to save`; do not treat these commands as reliable. |
+| Water | Current-day read and intake logging | Premium-gated: the account in live checks is `registered non-premium` and the server rejects both operations (299 `Could not save`). Verified via web sources that water tracking is a Premium feature. |
+| Saved meals | List, details, quick picks, meal/item writes, log to diary | Reads have been checked live. Create/delete verified live over form POST (app transport); other writes share the transport but are unproven. |
 | Account/settings | Details, account settings, rename, attributes, locale | Read commands have live-check evidence. Rename is implemented and changes the account immediately if accepted. General settings editing is absent. |
 | Notifications | List | Read-only; checked live. |
 | Social | Block-related user lists | Read-only; checked live with empty lists. CLI help labels `blocks` as users blocking you and `blocking` as users you block; direction has not been confirmed against populated lists. No feed posting or block/unblock commands. |
@@ -174,9 +174,9 @@ Search pages are zero-based. `--market` applies only to cookbook count; it is no
 
 | Command | Behavior and defaults |
 | --- | --- |
-| `diary day [--date YYYY-MM-DD]` | Read the current server day. Any date different from the CLI's computed "today" is rejected locally; this is not historical lookup. |
+| `diary day [--date YYYY-MM-DD]` | Read the current server day with entry rows, IDs, per-entry macros (protein/carbs/fat/fiber), servings, and day totals. Any date different from the CLI's computed "today" is rejected locally; this is not historical lookup. |
 | `diary add --food-id ID --serving-id ID [--meal other] [--meal-id ID] [--date YYYY-MM-DD] [--units 1]` | Add a food using the selected serving. Prefer an explicit date. |
-| `diary rm ENTRY_ID [--date YYYY-MM-DD]` | Delete a known entry ID. `--date` is the recorded date (default today). Keep the add response: day output does not reliably expose entry IDs. No confirmation prompt. |
+| `diary rm ENTRY_ID [--date YYYY-MM-DD]` | Delete an entry ID shown by `diary day`. `--date` is the recorded date (default today). No confirmation prompt. |
 
 `--units` is a serving multiplier, not grams. Use a gram-based portion if you want to enter a mass. Meal names are case-insensitive:
 
@@ -190,7 +190,7 @@ Search pages are zero-based. `--market` applies only to cookbook count; it is no
 | `prebreakfast` or `pre-breakfast` | 5 |
 | `secondbreakfast` or `second-breakfast` | 6 |
 
-`--meal-id` overrides the name. Food ID, serving ID, and diary entry ID are not interchangeable. Keep the raw add response to preserve any returned identifiers. Despite the `rm` help hint, `diary day --format json` is not a reliable source of entry IDs.
+`--meal-id` overrides the name. Food ID, serving ID, and diary entry ID are not interchangeable. `diary day` lists entry rows with their IDs, grouped by meal with energy subtotals.
 
 ### Weight, exercise, and water
 
@@ -200,14 +200,14 @@ Search pages are zero-based. `--market` applies only to cookbook count; it is no
 | `exercise day` | Read the current exercise day. |
 | `exercise types` | List activity type IDs. |
 | `exercise log --type-id ID --mins MINUTES [--kcal NUMBER] [--description TEXT]` | Submit activity duration, optional energy, and a note. Without `--kcal`, the request leaves estimation to the server. Known live rejection. |
-| `water day` | Read current-day water data. Known live rejection. |
-| `water log ML [--goal-ml 2000]` | Submit an intake increment in milliliters and a daily goal. Known live rejection. |
+| `water day` | Read current-day water data. Requires Premium; non-premium accounts get 299 `Could not save`. |
+| `water log ML [--goal-ml 2000]` | Submit an intake increment in milliliters and a daily goal. Requires Premium; non-premium accounts get 299 `Could not save`. |
 
 These commands have no date selector. Water uses the UTC calendar day. Do not repeatedly submit a write just because the human output is sparse; check account state first.
 
 ### Saved meals
 
-Saved meals are reusable food collections, distinct from the breakfast/lunch/dinner categories in the diary. All writes below are experimental because live requests returned `Unable to save`.
+Saved meals are reusable food collections, distinct from the breakfast/lunch/dinner categories in the diary. Writes go as form POSTs like the app; create/delete round-trip verified live.
 
 | Command | Behavior and defaults |
 | --- | --- |
@@ -391,9 +391,9 @@ A missing installation identity caused this generic login error in earlier live 
 
 Default diary dates are the current UTC calendar day (floored Unix epoch days). That matches `recordedDate`/`dateInt`. Local timezone is not used. Pass `--date YYYY-MM-DD` on `diary add` and `diary rm` when you want a specific civil date.
 
-`diary day` reads the server current day only. A `--date` other than today is rejected: history is not supported. Day JSON is often just `{dateint, guid}` with no entry rows, so keep add responses if you may need to delete.
+`diary day` reads the server current day only. A `--date` other than today is rejected: history is not supported. The page is read as a form POST like the app; a GET returns only the `{dateint, guid}` shell.
 
-Date parsing does not fully validate calendar dates. Supply a real `YYYY-MM-DD` date. Keep entry identifiers returned by adds: the day response may contain only summaries, even with `--format json`. An empty human view is not proof that the diary is empty.
+Date parsing rejects impossible calendar dates (including February 29 on non-leap years) but stays lenient on padding and extra segments. Supply a real `YYYY-MM-DD` date.
 
 ### `Unable to save` or an empty rejection response
 

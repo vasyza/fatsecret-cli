@@ -48,9 +48,7 @@ fn diary_rm_help_lists_date() {
         .assert()
         .success()
         .stdout(predicate::str::contains("--date"))
-        .stdout(predicate::str::contains(
-            "does not reliably expose entry IDs",
-        ));
+        .stdout(predicate::str::contains("see it in `diary day`"));
 }
 
 #[test]
