@@ -57,10 +57,10 @@ fn find_food_id(v: &serde_json::Value) -> Option<i64> {
             if let Some(n) = obj.as_i64() {
                 return Some(n);
             }
-            if let Some(s) = obj.as_str() {
-                if let Ok(n) = s.parse::<i64>() {
-                    return Some(n);
-                }
+            if let Some(s) = obj.as_str()
+                && let Ok(n) = s.parse::<i64>()
+            {
+                return Some(n);
             }
         }
     }

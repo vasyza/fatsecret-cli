@@ -176,3 +176,40 @@ fn auth_login_and_logout_help_render() {
         .assert()
         .success();
 }
+
+#[test]
+fn diary_rm_rejects_impossible_date_offline() {
+    Command::cargo_bin("fatsecret-cli")
+        .unwrap()
+        .env("XDG_CONFIG_HOME", "/nonexistent-xdg-fatsecret-cli")
+        .env(
+            "FATSECRET_CREDENTIALS",
+            "/nonexistent-creds-fatsecret-cli.json",
+        )
+        .env_remove("FATSECRET_SERVER_ID")
+        .args(["diary", "rm", "1", "--date", "2026-13-45"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("bad date"))
+        .stderr(predicate::str::contains("want YYYY-MM-DD"));
+}
+
+#[test]
+fn exercise_log_help_renders() {
+    Command::cargo_bin("fatsecret-cli")
+        .unwrap()
+        .args(["exercise", "log", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("type-id"));
+}
+
+#[test]
+fn water_log_help_renders() {
+    Command::cargo_bin("fatsecret-cli")
+        .unwrap()
+        .args(["water", "log", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("goal-ml"));
+}

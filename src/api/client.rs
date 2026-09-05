@@ -96,12 +96,10 @@ impl FsClient {
         let value = parse_body(&text)?;
         // Legacy pages answer 200 with a bare failure string instead of an
         // error object; surface it instead of reporting success.
-        if let Value::String(s) = &value
-            && s.contains("Unable to save")
-        {
+        if let Some(msg) = unable_to_save_message(&value) {
             return Err(AppError::Api {
                 code: code.to_string(),
-                message: s.clone(),
+                message: msg.to_string(),
             });
         }
         if !code.is_success() {
@@ -600,12 +598,22 @@ fn parse_body(text: &str) -> Result<Value> {
     xml_to_value(body).map_err(|e| AppError::Msg(format!("unparseable response body: {e}")))
 }
 
+/// Legacy bare-string failure marker: some `.aspx` action pages answer
+/// HTTP 200 with plain text containing `Unable to save`. Returns the
+/// message when present so `finish` can surface it as an error.
+fn unable_to_save_message(value: &Value) -> Option<&str> {
+    match value {
+        Value::String(s) if s.contains("Unable to save") => Some(s.as_str()),
+        _ => None,
+    }
+}
+
 fn trim_xml_prolog(s: &str) -> &str {
     let t = s.trim_start();
-    if let Some(rest) = t.strip_prefix("<?") {
-        if let Some(end) = rest.find("?>") {
-            return rest[end + 2..].trim_start();
-        }
+    if let Some(rest) = t.strip_prefix("<?")
+        && let Some(end) = rest.find("?>")
+    {
+        return rest[end + 2..].trim_start();
     }
     t
 }
@@ -974,5 +982,14 @@ mod tests {
         let items = v["activitytype"].as_array().expect("list preserved");
         assert_eq!(items.len(), 2);
         assert_eq!(items[0]["name"], serde_json::json!("Abs"));
+    }
+
+    #[test]
+    fn detects_unable_to_save_string_body() {
+        let v = parse_body("Unable to save").unwrap();
+        assert_eq!(unable_to_save_message(&v), Some("Unable to save"));
+        let v = parse_body(r#"{"ok":true}"#).unwrap();
+        assert_eq!(unable_to_save_message(&v), None);
+        assert_eq!(unable_to_save_message(&Value::Null), None);
     }
 }

@@ -37,7 +37,24 @@ pub(crate) fn date_to_days(day: &str) -> Result<i64> {
     ) else {
         return Err(AppError::Msg(format!("bad date {day:?}, want YYYY-MM-DD")));
     };
+    if !(1..=12).contains(&m) || d < 1 || d > days_in_month(y, m) {
+        return Err(AppError::Msg(format!("bad date {day:?}, want YYYY-MM-DD")));
+    }
     Ok(days_from_civil(y, m, d))
+}
+
+fn is_leap_year(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+fn days_in_month(y: i64, m: i64) -> i64 {
+    match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(y) => 29,
+        2 => 28,
+        _ => 0,
+    }
 }
 
 pub(crate) fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
@@ -86,6 +103,12 @@ pub async fn run(client: &FsClient, format: OutputFormat, args: DiaryArgs) -> Re
                 "",
             );
             let v = client.journal_update(recorded, &[entry], &[]).await?;
+            if let Some(detail) = journal_failed_entries(&v) {
+                return Err(AppError::Api {
+                    code: "200".to_string(),
+                    message: detail,
+                });
+            }
             emit(format, "entry logged", "OK", &v)
         }
         DiaryAction::Rm { entry_id, date } => {
@@ -106,6 +129,25 @@ fn as_text(v: &serde_json::Value) -> Option<&str> {
         }
         _ => None,
     }
+}
+
+/// Server-side per-entry failures from `update-journal-entries`.
+/// Live responses carry HTTP 200 with `{failedEntries: [{errorCode, references}]}`;
+/// a non-empty array means the entry was rejected despite the 200.
+pub(crate) fn journal_failed_entries(v: &serde_json::Value) -> Option<String> {
+    let entries = v.get("failedEntries")?.as_array()?;
+    let first = entries.first()?;
+    let code = first
+        .get("errorCode")
+        .map(|c| c.to_string())
+        .unwrap_or("?".to_string());
+    let refs = first
+        .get("references")
+        .map(|r| r.to_string())
+        .unwrap_or("[]".to_string());
+    Some(format!(
+        "failedEntries[0]: errorCode={code} references={refs}"
+    ))
 }
 
 #[cfg(test)]
@@ -129,7 +171,14 @@ mod tests {
         assert_eq!(date_to_days("1970-01-01").unwrap(), 0);
         assert_eq!(date_to_days("1970-01-02").unwrap(), 1);
         assert!(date_to_days("not-a-date").is_err());
-        assert!(date_to_days("2026-13-45").is_ok()); // shape-checked only
+        assert!(date_to_days("2026-13-45").is_err());
+        assert!(date_to_days("2026-00-10").is_err());
+        assert!(date_to_days("2026-01-00").is_err());
+        assert!(date_to_days("2026-04-31").is_err());
+        assert!(date_to_days("2023-02-29").is_err());
+        assert!(date_to_days("2024-02-29").is_ok());
+        assert!(date_to_days("2000-02-29").is_ok());
+        assert!(date_to_days("1900-02-29").is_err());
         assert_eq!(
             crate::auth::device::from_days(date_to_days("2026-09-05").unwrap()),
             "2026-09-05"
@@ -144,5 +193,14 @@ mod tests {
         let err = recorded_date(&Some("not-a-date".to_string())).unwrap_err();
         assert!(err.to_string().contains("bad date"));
         assert!(err.to_string().contains("want YYYY-MM-DD"));
+    }
+
+    #[test]
+    fn surfaces_failed_entries() {
+        let v = serde_json::json!({"failedEntries": [{"errorCode": 200, "references": ["0"]}]});
+        let detail = journal_failed_entries(&v).expect("must surface rejection");
+        assert!(detail.contains("200"), "code: {detail}");
+        assert!(journal_failed_entries(&serde_json::json!({"failedEntries": []})).is_none());
+        assert!(journal_failed_entries(&serde_json::json!({})).is_none());
     }
 }
