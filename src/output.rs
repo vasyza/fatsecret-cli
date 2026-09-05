@@ -84,7 +84,7 @@ pub fn render_foods_search(v: &Value) -> (String, String) {
         let name = field(item, NAME_KEYS);
         let kcal = field(item, &["energyPerPortion", "calories"]);
         let portion = field(item, &["defaultPortionDescription", "serving_description"]);
-        human.push_str(&format!("{id}  {name} — {kcal} kcal / {portion}\n"));
+        human.push_str(&format!("{id}  {name} — {kcal} energy / {portion}\n"));
         plain.push_str(&format!("{id}\t{name}\t{kcal}\t{portion}\n"));
     }
     (human, plain)
@@ -200,7 +200,7 @@ pub fn render_food_get(v: &Value) -> (String, String) {
                     ],
                 );
                 let kcal = field(item, &["energyPerPortion", "calories", "energy"]);
-                human.push_str(&format!("  {pid}  {desc}: {kcal} kcal\n"));
+                human.push_str(&format!("  {pid}  {desc}: {kcal} energy\n"));
                 plain.push_str(&format!("{pid}\t{desc}\t{kcal}\n"));
                 rows += 1;
             }
@@ -288,10 +288,10 @@ pub fn render_diary_day(v: &Value) -> (String, String) {
             let kcal = field(item, &["energyPerPortion", "calories", "energy"]);
             let kcal_num: f64 = kcal.parse().unwrap_or(0.0);
             subtotal += kcal_num;
-            lines.push_str(&format!("  {id}  {name} — {kcal} kcal\n"));
+            lines.push_str(&format!("  {id}  {name} — {kcal} energy\n"));
             plains.push_str(&format!("{id}\t{meal}\t{name}\t{kcal}\n"));
         }
-        human.push_str(&format!("[{meal}] subtotal {subtotal:.0} kcal\n{lines}"));
+        human.push_str(&format!("[{meal}] subtotal {subtotal:.0} energy\n{lines}"));
         plain.push_str(&plains);
     }
     (human, plain)
@@ -588,7 +588,7 @@ mod tests {
         let (human, plain) = render_foods_search(&v);
         assert!(human.contains("611 total"), "total: {human}");
         assert!(human.contains("39715  Oats"), "row: {human}");
-        assert!(human.contains("389"), "kcal: {human}");
+        assert!(human.contains("389.0 energy"), "energy: {human}");
         assert!(plain.contains("39715\tOats\t389"), "plain: {plain}");
     }
 

@@ -29,7 +29,7 @@ pub async fn dispatch(cli: Cli) -> Result<()> {
     let app = AppConfig::resolve(cli.config.as_deref())?;
     let format: OutputFormat = cli.format;
     match cli.command {
-        Commands::Auth(a) => auth_cmd::run(&app, a).await,
+        Commands::Auth(a) => auth_cmd::run(&app, format, a).await,
         Commands::Foods(f) => food_cmd::run(&app_client(&app)?, format, f).await,
         Commands::Recipes(r) => recipe_cmd::run(&app_client(&app)?, format, r).await,
         Commands::Diary(d) => diary_cmd::run(&app_client(&app)?, format, d).await,

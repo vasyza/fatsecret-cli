@@ -123,12 +123,12 @@ All data commands require stored or environment-provided credentials, including 
 | --- | --- |
 | `-c, --config PATH` | Select a TOML configuration file. Also settable through `FATSECRET_CONFIG`. |
 | `--format human\|json\|plain` | Output format; default `human`. Authentication and completions are exceptions. |
-| `--color auto\|always\|never` | Accepted, default `auto`; current renderers do not apply color. |
-| `-v, --verbose` | Accepted and repeatable (`-vv`), but currently not connected to logging configuration. |
+| `--color auto\|always\|never` | Log color on stderr only; data output stays uncolored. Default `auto`. |
+| `-v, --verbose` | When `RUST_LOG` is unset: `-v` is `info`, `-vv` is `debug`, no flag is `warn`. `RUST_LOG` wins when set. |
 | `-h, --help` | Show help. |
 | `-V, --version` | Show version. |
 
-Global options can also follow subcommands. Logging uses `RUST_LOG`, not the verbosity counter.
+Global options can also follow subcommands. `RUST_LOG` overrides `-v` when set.
 
 ### Authentication
 
@@ -176,7 +176,7 @@ Search pages are zero-based. `--market` applies only to cookbook count; it is no
 | --- | --- |
 | `diary day [--date YYYY-MM-DD]` | Read the current server day. Any date different from the CLI's computed "today" is rejected locally; this is not historical lookup. |
 | `diary add --food-id ID --serving-id ID [--meal other] [--meal-id ID] [--date YYYY-MM-DD] [--units 1]` | Add a food using the selected serving. Prefer an explicit date. |
-| `diary rm ENTRY_ID` | Delete a known entry ID using the CLI's computed current date. No date override or confirmation prompt. |
+| `diary rm ENTRY_ID [--date YYYY-MM-DD]` | Delete a known entry ID. `--date` is the recorded date (default today). Keep the add response: day output does not reliably expose entry IDs. No confirmation prompt. |
 
 `--units` is a serving multiplier, not grams. Use a gram-based portion if you want to enter a mass. Meal names are case-insensitive:
 
@@ -249,7 +249,7 @@ Data commands write results to stdout. Errors and tracing diagnostics go to stde
 - `json` prints the parsed API value as pretty JSON. Legacy XML is converted to JSON; text nodes can appear as `{"$text":"..."}` and singleton objects may become arrays when repeated. Empty successful responses can be `null`.
 - `plain` prints command-specific, usually tab-separated data without a shared schema. Writes commonly print `OK`. Some commands have no useful plain representation.
 
-Authentication commands print text regardless of `--format`. Completions always print shell code. JSON reflects remote response shapes, not a versioned CLI schema; handle absent fields and avoid assuming a fixed structure across endpoints.
+Authentication commands use `--format` (`human`/`plain` text, or JSON status objects). Completions always print shell code. JSON reflects remote response shapes, not a versioned CLI schema; handle absent fields and avoid assuming a fixed structure across endpoints.
 
 For example, with [jq](https://jqlang.org/) installed:
 
@@ -389,9 +389,9 @@ A missing installation identity caused this generic login error in earlier live 
 
 ### Diary date or entry IDs are wrong or missing
 
-The default date helper currently rounds epoch days upward. Except at an exact UTC day boundary, this produces the next UTC date rather than the current one, and it does not use your local timezone. Use `diary add --date YYYY-MM-DD` with the date you intend to record.
+Default diary dates are the current UTC calendar day (floored Unix epoch days). That matches `recordedDate`/`dateInt`. Local timezone is not used. Pass `--date YYYY-MM-DD` on `diary add` and `diary rm` when you want a specific civil date.
 
-`diary day` reads the server's current day, while its optional date check uses that same faulty helper. Omit `--date` when reading. `diary rm` uses the computed date and offers no override; deletion of an entry on another date is not reliable. Use the mobile app when you need to correct entries the CLI cannot address safely.
+`diary day` reads the server current day only. A `--date` other than today is rejected: history is not supported. Day JSON is often just `{dateint, guid}` with no entry rows, so keep add responses if you may need to delete.
 
 Date parsing does not fully validate calendar dates. Supply a real `YYYY-MM-DD` date. Keep entry identifiers returned by adds: the day response may contain only summaries, even with `--format json`. An empty human view is not proof that the diary is empty.
 
@@ -401,13 +401,13 @@ Saved-meal writes, exercise logging, and water operations have known live failur
 
 ### Missing fields, unusual units, or sparse tables
 
-Use `--format json` to inspect the parsed response. Legacy XML has different shapes from modern JSON, and human renderers show only selected fields. The client sends `unit: kj` headers while some renderers label energy as kcal; no general unit normalization is implemented. Check the source field and the mobile app before interpreting energy values or calculations.
+Use `--format json` to inspect the parsed response. Legacy XML has different shapes from modern JSON, and human renderers show only selected fields. Requests send `unit: kj`, but live food values can match kilocalorie figures (oats `energyPerPortion` 389 per 100 g). Human tables label the number as `energy` and do not convert it. Check the source field and the mobile app before interpreting energy values.
 
 The CLI has no global locale or unit-selection flag. `settings locale` only reads settings. Do not assume all food queries use the market supplied to `recipes cookbook-count`.
 
-### Verbose flags do not add diagnostics
+### Logging
 
-`-v` and `-vv` are parsed but currently unused. Tracing reads `RUST_LOG`. Avoid broad debug/trace logging when handling credentials or personal data, and redact diagnostics before sharing them.
+When `RUST_LOG` is unset, `-v` and `-vv` set tracing to `info` and `debug`. `--color never` disables log ANSI on stderr. Avoid broad debug/trace logging when handling credentials or personal data, and redact diagnostics before sharing them.
 
 ## Development
 

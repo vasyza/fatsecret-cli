@@ -113,16 +113,27 @@ fn now_utc() -> String {
         .unwrap_or_default()
 }
 
-/// Today as `YYYY-MM-DD` (civil date from days-since-epoch).
+/// Today is `YYYY-MM-DD` in UTC from floored Unix epoch days; matches
+/// `recordedDate`/`dateInt` basis; no local timezone.
 pub fn today_ymd() -> String {
-    let days = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs().div_ceil(86400) as i64)
-        .unwrap_or(0);
-    from_days(days)
+    from_days(today_days())
 }
 
-fn from_days(days: i64) -> String {
+/// Floored Unix epoch days (`secs / 86400`).
+pub(crate) fn epoch_secs_to_days(secs: u64) -> i64 {
+    (secs as i64).div_euclid(86400)
+}
+
+/// UTC epoch day for now (floored).
+pub fn today_days() -> i64 {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    epoch_secs_to_days(secs)
+}
+
+pub(crate) fn from_days(days: i64) -> String {
     let z = days + 719468;
     let era = z.div_euclid(146097);
     let doe = z.rem_euclid(146097);
@@ -182,5 +193,24 @@ mod tests {
         });
         assert_eq!(body["appId"], json!(APP_ID));
         assert_eq!(body["authVersion"], json!("FIS_v2"));
+    }
+
+    #[test]
+    fn epoch_secs_to_days_floors() {
+        assert_eq!(epoch_secs_to_days(0), 0);
+        assert_eq!(epoch_secs_to_days(1), 0);
+        assert_eq!(epoch_secs_to_days(86399), 0);
+        assert_eq!(epoch_secs_to_days(86400), 1);
+    }
+
+    #[test]
+    fn from_days_anchors() {
+        assert_eq!(from_days(0), "1970-01-01");
+        assert_eq!(from_days(1), "1970-01-02");
+    }
+
+    #[test]
+    fn today_ymd_matches_today_days() {
+        assert_eq!(today_ymd(), from_days(today_days()));
     }
 }

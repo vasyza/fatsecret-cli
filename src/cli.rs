@@ -27,7 +27,7 @@ pub struct Cli {
     #[arg(long, value_enum, default_value_t = OutputFormat::Human, global = true)]
     pub format: OutputFormat,
 
-    /// Color mode (colors currently minimal; never in json/plain or non-TTY)
+    /// Controls log color on stderr; data output stays uncolored
     #[arg(long, value_enum, default_value_t = ColorChoice::Auto, global = true)]
     pub color: ColorChoice,
 
@@ -156,7 +156,7 @@ pub struct DiaryArgs {
 pub enum DiaryAction {
     /// Show the diary day (default today)
     Day {
-        /// Date YYYY-MM-DD (default today)
+        /// Date YYYY-MM-DD; must equal today. History is unsupported.
         #[arg(long)]
         date: Option<String>,
     },
@@ -181,10 +181,13 @@ pub enum DiaryAction {
         #[arg(long, default_value_t = 1.0)]
         units: f64,
     },
-    /// Delete an entry by id (see day --format json)
+    /// Delete an entry by id; keep the add response (day output does not reliably expose entry IDs)
     Rm {
         /// Entry id
         entry_id: i64,
+        /// Entry recorded date YYYY-MM-DD (default today)
+        #[arg(long)]
+        date: Option<String>,
     },
 }
 

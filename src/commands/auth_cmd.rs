@@ -1,12 +1,13 @@
 use crate::api::register_body;
 use crate::auth::device::{ensure_device_id, today_ymd};
 use crate::auth::{FileStore, login, prompt_password};
-use crate::cli::{AuthAction, AuthArgs};
+use crate::cli::{AuthAction, AuthArgs, OutputFormat};
 use crate::commands::{app_client, http_client};
 use crate::config::AppConfig;
 use crate::error::{AppError, Result};
+use crate::output::emit;
 
-pub async fn run(app: &AppConfig, args: AuthArgs) -> Result<()> {
+pub async fn run(app: &AppConfig, format: OutputFormat, args: AuthArgs) -> Result<()> {
     let store = FileStore::platform()?;
     match args.action {
         AuthAction::Login { username } => {
@@ -26,8 +27,13 @@ pub async fn run(app: &AppConfig, args: AuthArgs) -> Result<()> {
             )
             .await?;
             store.save(&triple)?;
-            println!("logged in as {}", triple.username);
-            Ok(())
+            let human = format!("logged in as {}", triple.username);
+            emit(
+                format,
+                &human,
+                &human,
+                &serde_json::json!({"status":"logged in","username":triple.username}),
+            )
         }
         AuthAction::Register {
             email,
@@ -64,8 +70,13 @@ pub async fn run(app: &AppConfig, args: AuthArgs) -> Result<()> {
             );
             let client = app_client(app)?;
             client.register(&body, Some(&device_id)).await?;
-            println!("registered; check {email} for confirmation");
-            Ok(())
+            let human = format!("registered; check {email} for confirmation");
+            emit(
+                format,
+                &human,
+                &human,
+                &serde_json::json!({"status":"registered","email":email}),
+            )
         }
         AuthAction::ForgotPassword { email } => {
             let http = http_client();
@@ -74,8 +85,13 @@ pub async fn run(app: &AppConfig, args: AuthArgs) -> Result<()> {
             client
                 .forgot_password(email.trim(), Some(&device_id))
                 .await?;
-            println!("reset email sent to {email}");
-            Ok(())
+            let human = format!("reset email sent to {email}");
+            emit(
+                format,
+                &human,
+                &human,
+                &serde_json::json!({"status":"reset email sent","email":email}),
+            )
         }
         AuthAction::ResetPassword => {
             let code = rpassword::prompt_password("Reset code: ").map_err(AppError::Io)?;
@@ -86,27 +102,48 @@ pub async fn run(app: &AppConfig, args: AuthArgs) -> Result<()> {
             client
                 .reset_password(code.trim(), &password, Some(&device_id))
                 .await?;
-            println!("password reset; log in with the new password");
-            Ok(())
+            let human = "password reset; log in with the new password";
+            emit(
+                format,
+                human,
+                human,
+                &serde_json::json!({"status":"password reset"}),
+            )
         }
         AuthAction::Status => match store.load() {
-            Ok(t) if t.username.is_empty() => {
-                println!("logged in");
-                Ok(())
-            }
+            Ok(t) if t.username.is_empty() => emit(
+                format,
+                "logged in",
+                "logged in",
+                &serde_json::json!({"status":"logged in"}),
+            ),
             Ok(t) => {
-                println!("logged in as {}", t.username);
-                Ok(())
+                let human = format!("logged in as {}", t.username);
+                emit(
+                    format,
+                    &human,
+                    &human,
+                    &serde_json::json!({"status":"logged in","username":t.username}),
+                )
             }
             Err(e) => {
-                println!("logged out");
+                emit(
+                    format,
+                    "logged out",
+                    "logged out",
+                    &serde_json::json!({"status":"logged out"}),
+                )?;
                 Err(e)
             }
         },
         AuthAction::Logout => {
             store.delete()?;
-            println!("logged out");
-            Ok(())
+            emit(
+                format,
+                "logged out",
+                "logged out",
+                &serde_json::json!({"status":"logged out"}),
+            )
         }
     }
 }

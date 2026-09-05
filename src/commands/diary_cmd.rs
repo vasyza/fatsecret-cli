@@ -23,12 +23,12 @@ pub(crate) fn meal_id(name: &str, override_id: Option<i64>) -> Result<i64> {
     }
 }
 
-fn recorded_date(date: &Option<String>) -> Result<(String, i64)> {
+pub(crate) fn recorded_date(date: &Option<String>) -> Result<(String, i64)> {
     let day = date.clone().unwrap_or_else(today_ymd);
     Ok((day.clone(), date_to_days(&day)?))
 }
 
-fn date_to_days(day: &str) -> Result<i64> {
+pub(crate) fn date_to_days(day: &str) -> Result<i64> {
     let parts: Vec<&str> = day.split('-').collect();
     let (Some(y), Some(m), Some(d)) = (
         parts.first().and_then(|s| s.parse::<i64>().ok()),
@@ -40,7 +40,7 @@ fn date_to_days(day: &str) -> Result<i64> {
     Ok(days_from_civil(y, m, d))
 }
 
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+pub(crate) fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);
     let yoe = y.rem_euclid(400);
@@ -57,7 +57,7 @@ pub async fn run(client: &FsClient, format: OutputFormat, args: DiaryArgs) -> Re
                 && *d != today_ymd()
             {
                 return Err(AppError::Msg(
-                    "past days need the day guid (unresolved); omit --date for today".to_string(),
+                    "diary history is not supported by the known endpoint; omit --date to read the server current day".to_string(),
                 ));
             }
             let v = client.diary_day().await?;
@@ -88,8 +88,8 @@ pub async fn run(client: &FsClient, format: OutputFormat, args: DiaryArgs) -> Re
             let v = client.journal_update(recorded, &[entry], &[]).await?;
             emit(format, "entry logged", "OK", &v)
         }
-        DiaryAction::Rm { entry_id } => {
-            let (_, recorded) = recorded_date(&None)?;
+        DiaryAction::Rm { entry_id, date } => {
+            let (_, recorded) = recorded_date(&date)?;
             // The app serializes `deletes` as a bare id array, not objects.
             let del = serde_json::json!(entry_id);
             let v = client.journal_update(recorded, &[], &[del]).await?;
@@ -130,5 +130,19 @@ mod tests {
         assert_eq!(date_to_days("1970-01-02").unwrap(), 1);
         assert!(date_to_days("not-a-date").is_err());
         assert!(date_to_days("2026-13-45").is_ok()); // shape-checked only
+        assert_eq!(
+            crate::auth::device::from_days(date_to_days("2026-09-05").unwrap()),
+            "2026-09-05"
+        );
+    }
+
+    #[test]
+    fn recorded_date_uses_explicit_day() {
+        let (day, recorded) = recorded_date(&Some("2026-09-05".to_string())).unwrap();
+        assert_eq!(day, "2026-09-05");
+        assert_eq!(recorded, date_to_days("2026-09-05").unwrap());
+        let err = recorded_date(&Some("not-a-date".to_string())).unwrap_err();
+        assert!(err.to_string().contains("bad date"));
+        assert!(err.to_string().contains("want YYYY-MM-DD"));
     }
 }

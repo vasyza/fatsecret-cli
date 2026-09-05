@@ -1,17 +1,10 @@
 use crate::api::FsClient;
+use crate::auth::device::today_days;
 use crate::cli::{
     ExerciseAction, ExerciseArgs, OutputFormat, WaterAction, WaterArgs, WeightAction, WeightArgs,
 };
 use crate::error::Result;
 use crate::output::{emit, render_exercise, render_water};
-
-fn today_days() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    now.div_euclid(86400)
-}
 
 pub async fn run_weight(client: &FsClient, format: OutputFormat, args: WeightArgs) -> Result<()> {
     match args.action {
