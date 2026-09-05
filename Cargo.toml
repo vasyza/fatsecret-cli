@@ -1,0 +1,43 @@
+[package]
+name = "fatsecret-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Terminal client mirroring the FatSecret mobile app"
+
+[lib]
+name = "fatsecret_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fatsecret-cli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap_complete = "4"
+clap = { version = "4.5", features = ["derive", "env", "wrap_help", "cargo"] }
+directories = "6"
+rpassword = "7"
+rand = "0.9"
+quick-xml = { version = "0.38", features = ["serialize"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+
+[dev-dependencies]
+assert_cmd = "2"
+parking_lot = "0.12"
+predicates = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
