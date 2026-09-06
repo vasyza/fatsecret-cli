@@ -149,7 +149,7 @@ fatsecret-cli <COMMAND> <SUBCOMMAND> --help
 
 | Команда | Поведение и значения по умолчанию |
 | --- | --- |
-| `foods search QUERY [--page 0] [--size 20]` | Поиск продуктов. Нумерация страниц с нуля. Запрос из нескольких слов заключайте в кавычки. |
+| `foods search QUERY [--page 0] [--size 20] [--market CODE] [--lang CODE]` | Поиск продуктов. Нумерация страниц с нуля. Запрос из нескольких слов заключайте в кавычки. Индекс маркета определяет выдачу (`RU` находит русские продукты; по умолчанию `US` из настроек, переопределение через `FATSECRET_MARKET_LOCALE`). |
 | `foods get ID` | Карточка продукта с порциями, если сервер их возвращает. |
 | `foods popular ID [ID ...]` | Популярные порции. Используйте `--format json`; вывод plain пустой. |
 | `foods barcode GTIN` | Поиск по цифрам штрихкода, затем получение карточки найденного продукта. Сохраняйте ведущие нули. |
@@ -313,11 +313,29 @@ fatsecret-cli --config ./config.toml foods search "oatmeal"
 | `reset_url` | `FATSECRET_RESET_URL` | Завершение сброса пароля. |
 | `user_details_url` | `FATSECRET_USER_DETAILS_URL` | Данные аккаунта. |
 | `change_username_url` | `FATSECRET_CHANGE_USERNAME_URL` | Смена имени аккаунта. |
+| `feed_add_block_url` | `FATSECRET_FEED_ADD_BLOCK_URL` | Блокировка пользователя ленты. |
+| `learning_course_bookmark_save_url` | `FATSECRET_LEARNING_COURSE_BOOKMARK_SAVE_URL` | Сохранение закладки курса. |
+| `learning_course_bookmark_delete_url` | `FATSECRET_LEARNING_COURSE_BOOKMARK_DELETE_URL` | Удаление закладки курса. |
+| `learning_lesson_bookmark_save_url` | `FATSECRET_LEARNING_LESSON_BOOKMARK_SAVE_URL` | Сохранение закладки урока. |
+| `learning_lesson_bookmark_delete_url` | `FATSECRET_LEARNING_LESSON_BOOKMARK_DELETE_URL` | Удаление закладки урока. |
+| `learning_lesson_progress_save_url` | `FATSECRET_LEARNING_LESSON_PROGRESS_SAVE_URL` | Сохранение прогресса урока. |
+| `market_locale` | `FATSECRET_MARKET_LOCALE` | Индекс маркета поиска (`RU` находит русские продукты). |
+| `language_locale` | `FATSECRET_LANGUAGE_LOCALE` | Язык интерфейса для современных индексов. |
 | `server_base` | `FATSECRET_SERVER_BASE` | Базовый адрес старых эндпоинтов; нужен завершающий слеш. |
 
-Современные эндпоинты по умолчанию находятся на `https://app.ftscrt.com/`; база старых: `https://android.fatsecret.com/android/`. Атрибуты, списки блокировок и обучение используют фиксированные современные URL без переопределения. Изменение `server_base` не перенаправляет все запросы.
+Управляйте файлом без ручного редактирования TOML:
 
-Переопределения эндпоинтов предназначены для контролируемой отладки. Пароли или учётные данные могут уйти на указанный адрес. Не используйте недоверенный файл конфигурации или эндпоинт.
+```sh
+fatsecret-cli config show
+fatsecret-cli config set market_locale RU
+fatsecret-cli config unset market_locale
+fatsecret-cli config path
+```
+
+`config show` скрывает идентификатор устройства. Значения из `config set`
+сильнее встроенных, но слабее переменных `FATSECRET_*`.
+
+Современные эндпоинты по умолчанию находятся на `https://app.ftscrt.com/`; база старых: `https://android.fatsecret.com/android/`. Атрибуты, чтения списков блокировок и чтения обучения используют фиксированные современные URL без переопределения. Изменение `server_base` не перенаправляет все запросы.
 
 Изменение `--config` не переносит учётные данные и идентификатор устройства и не выбирает отдельный профиль аккаунта.
 

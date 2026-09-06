@@ -25,8 +25,20 @@ impl FsClient {
         Ok(Self { http, app, creds })
     }
 
-    pub fn http(&self) -> &Client {
-        &self.http
+    /// Clone with overridden market/language locales (per-search override).
+    pub fn with_locales(&self, market: Option<&str>, language: Option<&str>) -> Self {
+        let mut app = self.app.clone();
+        if let Some(m) = market {
+            app.market_locale = m.to_string();
+        }
+        if let Some(l) = language {
+            app.language_locale = l.to_string();
+        }
+        Self {
+            http: self.http.clone(),
+            app,
+            creds: self.creds.clone(),
+        }
     }
     fn authed(&self, req: RequestBuilder) -> Result<RequestBuilder> {
         let Some(t) = &self.creds else {
@@ -51,8 +63,16 @@ impl FsClient {
         Ok(req)
     }
     async fn post_json(&self, url: &str, body: &Value) -> Result<Value> {
-        let req = self.authed(self.http.post(url))?.json(body);
-        self.finish(req).await
+        let mut req = self.authed(self.http.post(url))?;
+        // Market + language scope modern indexes (e.g. food search);
+        // the app sends both on every modern call.
+        if !self.app.market_locale.is_empty() {
+            req = req.header("fs_market_locale", &self.app.market_locale);
+        }
+        if !self.app.language_locale.is_empty() {
+            req = req.header("fs_language_locale", &self.app.language_locale);
+        }
+        self.finish(req.json(body)).await
     }
 
     /// Legacy action-page write: the app POSTs `application/x-www-form-urlencoded`
@@ -193,6 +213,7 @@ impl FsClient {
         let url = format!("{}AccountSettingsAndroidPage.aspx", self.app.server_base);
         self.get_query(&url, &[("fl", "3")]).await
     }
+
     /// Change username: authed `POST {change_username_url}` with `{userName}`.
     pub async fn change_username(&self, name: &str) -> Result<Value> {
         let body = serde_json::json!({ "userName": name });

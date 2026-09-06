@@ -68,12 +68,40 @@ pub enum Commands {
     Learning(LearningArgs),
     /// Static food-groups data
     FoodGroups(FoodGroupsArgs),
+    /// View and edit persistent CLI settings
+    Config(ConfigArgs),
     /// Print shell completions
     Completions {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigArgs {
+    #[command(subcommand)]
+    pub action: ConfigAction,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigAction {
+    /// Show resolved settings (secrets masked)
+    Show,
+    /// Set a persistent setting (e.g. market_locale RU)
+    Set {
+        /// Setting key
+        key: String,
+        /// Setting value
+        value: String,
+    },
+    /// Remove a persistent setting (falls back to default)
+    Unset {
+        /// Setting key
+        key: String,
+    },
+    /// Print the settings file path
+    Path,
 }
 
 #[derive(Args, Debug)]
@@ -676,6 +704,12 @@ pub enum FoodsAction {
         /// Results per page
         #[arg(long, default_value_t = 20)]
         size: i64,
+        /// Market index override (e.g. RU); default from config
+        #[arg(long)]
+        market: Option<String>,
+        /// Language override (e.g. ru); default from config
+        #[arg(long)]
+        lang: Option<String>,
     },
     /// Full details for a food id (portions included when served)
     Get {

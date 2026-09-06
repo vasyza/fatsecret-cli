@@ -1,6 +1,7 @@
 pub mod account_cmd;
 pub mod auth_cmd;
 pub mod body_cmd;
+pub mod config_cmd;
 pub mod diary_cmd;
 pub mod food_cmd;
 pub mod meal_cmd;
@@ -47,6 +48,7 @@ pub async fn dispatch(cli: Cli) -> Result<()> {
         Commands::Feed(f) => misc_cmd::run_feed(&app_client(&app)?, format, f).await,
         Commands::Learning(l) => misc_cmd::run_learning(&app_client(&app)?, format, l).await,
         Commands::FoodGroups(g) => misc_cmd::run_food_groups(&app_client(&app)?, format, g).await,
+        Commands::Config(c) => config_cmd::run(&app, format, c).await,
         Commands::Account(a) => account_cmd::run(&app, a, format).await,
         Commands::Completions { .. } => Ok(()), // handled in main
     }

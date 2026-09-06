@@ -5,8 +5,15 @@ use crate::output::{emit, render_food_get, render_foods_search, render_types};
 
 pub async fn run(client: &FsClient, format: OutputFormat, args: FoodsArgs) -> Result<()> {
     match args.action {
-        FoodsAction::Search { query, page, size } => {
-            let v = client.foods_search(&query, page, size).await?;
+        FoodsAction::Search {
+            query,
+            page,
+            size,
+            market,
+            lang,
+        } => {
+            let scoped = client.with_locales(market.as_deref(), lang.as_deref());
+            let v = scoped.foods_search(&query, page, size).await?;
             let (human, plain) = render_foods_search(&v);
             emit(format, human.trim_end(), plain.trim_end(), &v)
         }

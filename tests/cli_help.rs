@@ -21,6 +21,7 @@ fn help_lists_subcommands() {
         .stdout(predicate::str::contains("feed"))
         .stdout(predicate::str::contains("learning"))
         .stdout(predicate::str::contains("account"))
+        .stdout(predicate::str::contains("config"))
         .stdout(predicate::str::contains("completions"));
 }
 #[test]
@@ -263,4 +264,20 @@ fn new_write_bad_input_fails_offline() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("bad --entry"));
+}
+
+#[test]
+fn config_help_renders() {
+    Command::cargo_bin("fatsecret-cli")
+        .unwrap()
+        .args(["config", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Set"));
+    Command::cargo_bin("fatsecret-cli")
+        .unwrap()
+        .args(["config", "set", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("key"));
 }

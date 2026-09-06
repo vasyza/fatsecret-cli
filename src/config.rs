@@ -45,6 +45,10 @@ pub const LEARNING_LESSON_PROGRESS_SAVE_URL_DEFAULT: &str =
 pub const SERVER_BASE_DEFAULT: &str = "https://android.fatsecret.com/android/";
 pub const APP_VERSION_DEFAULT: &str = "11.8.0.5";
 pub const DEVICE_MODEL_DEFAULT: &str = "android";
+/// Food-search market index (the app sends the device market).
+pub const MARKET_LOCALE_DEFAULT: &str = "US";
+/// UI language for modern indexes (the app sends the device language).
+pub const LANGUAGE_LOCALE_DEFAULT: &str = "en";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -92,6 +96,10 @@ pub struct AppConfig {
     pub device_model: String,
     #[serde(default = "default_app_version")]
     pub app_version: String,
+    #[serde(default = "default_market_locale")]
+    pub market_locale: String,
+    #[serde(default = "default_language_locale")]
+    pub language_locale: String,
     /// Stable device identity (Firebase Installation ID), sent as `c_d`/`c_desc`.
     /// Optional; mint via Firebase Installations API (see docs), or leave empty.
     #[serde(default)]
@@ -163,6 +171,12 @@ fn default_device_model() -> String {
 fn default_app_version() -> String {
     APP_VERSION_DEFAULT.to_string()
 }
+fn default_market_locale() -> String {
+    MARKET_LOCALE_DEFAULT.to_string()
+}
+fn default_language_locale() -> String {
+    LANGUAGE_LOCALE_DEFAULT.to_string()
+}
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -189,6 +203,8 @@ impl Default for AppConfig {
             server_base: default_server_base(),
             device_model: default_device_model(),
             app_version: default_app_version(),
+            market_locale: default_market_locale(),
+            language_locale: default_language_locale(),
             device_id: None,
         }
     }
@@ -275,6 +291,12 @@ impl AppConfig {
         if let Ok(v) = std::env::var("FATSECRET_APP_VERSION") {
             cfg.app_version = v;
         }
+        if let Ok(v) = std::env::var("FATSECRET_MARKET_LOCALE") {
+            cfg.market_locale = v;
+        }
+        if let Ok(v) = std::env::var("FATSECRET_LANGUAGE_LOCALE") {
+            cfg.language_locale = v;
+        }
         if let Ok(v) = std::env::var("FATSECRET_DEVICE_ID") {
             cfg.device_id = Some(v);
         }
@@ -285,8 +307,91 @@ impl AppConfig {
     }
 }
 
-fn default_config_path() -> Option<PathBuf> {
+pub(crate) fn default_config_path() -> Option<PathBuf> {
     BaseDirs::new().map(|b| b.config_dir().join("fatsecret-cli").join("config.toml"))
+}
+
+/// Settable config keys (TOML key = struct field name).
+pub const SETTABLE_KEYS: &[&str] = &[
+    "auth_url",
+    "food_search_url",
+    "food_popular_url",
+    "food_vote_url",
+    "food_types_url",
+    "recipe_count_url",
+    "scan_url",
+    "journal_url",
+    "register_url",
+    "forgot_url",
+    "reset_url",
+    "user_details_url",
+    "change_username_url",
+    "feed_add_block_url",
+    "learning_course_bookmark_save_url",
+    "learning_course_bookmark_delete_url",
+    "learning_lesson_bookmark_save_url",
+    "learning_lesson_bookmark_delete_url",
+    "learning_lesson_progress_save_url",
+    "server_base",
+    "device_model",
+    "app_version",
+    "market_locale",
+    "language_locale",
+    "device_id",
+];
+
+/// Read-modify-write one config key in the profile TOML file.
+/// `value=None` removes the override (falls back to default).
+/// Unknown keys are rejected before touching the disk.
+pub fn save_kv(explicit: Option<&Path>, key: &str, value: Option<&str>) -> Result<PathBuf> {
+    if !SETTABLE_KEYS.contains(&key) {
+        return Err(AppError::Msg(format!(
+            "bad config key {key:?}, want one of: {}",
+            SETTABLE_KEYS.join(", ")
+        )));
+    }
+    let path = explicit
+        .map(PathBuf::from)
+        .or_else(default_config_path)
+        .ok_or_else(|| AppError::Msg("no config dir available".to_string()))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut table: toml::Table = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| toml::from_str(&text).ok())
+        .unwrap_or_default();
+    match value {
+        Some(v) => {
+            table.insert(key.to_string(), toml::Value::String(v.to_string()));
+        }
+        None => {
+            table.remove(key);
+        }
+    }
+    std::fs::write(
+        &path,
+        toml::to_string(&table).map_err(|e| AppError::Msg(e.to_string()))?,
+    )?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(path)
+}
+
+/// Resolved config with the device id masked (safe to print).
+pub fn redacted(cfg: &AppConfig) -> serde_json::Value {
+    let mut v = serde_json::to_value(cfg).unwrap_or(serde_json::Value::Null);
+    if let Some(map) = v.as_object_mut() {
+        let masked = match cfg.device_id {
+            Some(_) => "<set>",
+            None => "<empty>",
+        };
+        map.insert("device_id".to_string(), masked.into());
+    }
+    v
 }
 
 #[cfg(test)]
@@ -327,7 +432,6 @@ mod tests {
 
     #[test]
     fn new_write_urls_default() {
-        let _guard = ENV_LOCK.lock();
         let cfg = AppConfig::default();
         assert_eq!(cfg.feed_add_block_url, FEED_ADD_BLOCK_URL_DEFAULT);
         assert_eq!(
@@ -350,5 +454,27 @@ mod tests {
             cfg.learning_lesson_progress_save_url,
             LEARNING_LESSON_PROGRESS_SAVE_URL_DEFAULT
         );
+    }
+
+    #[test]
+    fn locale_defaults_apply() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.market_locale, MARKET_LOCALE_DEFAULT);
+        assert_eq!(cfg.language_locale, LANGUAGE_LOCALE_DEFAULT);
+    }
+
+    #[test]
+    fn save_kv_round_trips_explicit_file() {
+        let dir = std::env::temp_dir().join(format!("fs-cli-test-{}", std::process::id()));
+        let path = dir.join("config.toml");
+        let _ = std::fs::remove_dir_all(&dir);
+        save_kv(Some(path.as_path()), "market_locale", Some("RU")).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("market_locale"), "file: {text}");
+        save_kv(Some(path.as_path()), "bogus_key", Some("x")).unwrap_err();
+        save_kv(Some(path.as_path()), "market_locale", None).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("market_locale"), "file: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

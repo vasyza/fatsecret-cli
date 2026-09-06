@@ -149,7 +149,7 @@ There is no password flag, password environment variable, or stdin password mode
 
 | Command | Behavior and defaults |
 | --- | --- |
-| `foods search QUERY [--page 0] [--size 20]` | Search foods. Pages are zero-based. Quote multiword queries. |
+| `foods search QUERY [--page 0] [--size 20] [--market CODE] [--lang CODE]` | Search foods. Pages are zero-based. Quote multiword queries. The market index scopes results (`RU` finds Russian foods; default `US` from config, override with `FATSECRET_MARKET_LOCALE`). |
 | `foods get ID` | Food details, including portions when the server supplies them. |
 | `foods popular ID [ID ...]` | Popular serving sizes. Use `--format json`; plain output is empty. |
 | `foods barcode GTIN` | Look up barcode digits, then fetch the matching food. Preserve leading zeros. |
@@ -313,11 +313,29 @@ Every supported TOML key has an environment override:
 | `reset_url` | `FATSECRET_RESET_URL` | Password-reset completion. |
 | `user_details_url` | `FATSECRET_USER_DETAILS_URL` | Account details. |
 | `change_username_url` | `FATSECRET_CHANGE_USERNAME_URL` | Account rename. |
+| `feed_add_block_url` | `FATSECRET_FEED_ADD_BLOCK_URL` | Feed user block. |
+| `learning_course_bookmark_save_url` | `FATSECRET_LEARNING_COURSE_BOOKMARK_SAVE_URL` | Course bookmark save. |
+| `learning_course_bookmark_delete_url` | `FATSECRET_LEARNING_COURSE_BOOKMARK_DELETE_URL` | Course bookmark delete. |
+| `learning_lesson_bookmark_save_url` | `FATSECRET_LEARNING_LESSON_BOOKMARK_SAVE_URL` | Lesson bookmark save. |
+| `learning_lesson_bookmark_delete_url` | `FATSECRET_LEARNING_LESSON_BOOKMARK_DELETE_URL` | Lesson bookmark delete. |
+| `learning_lesson_progress_save_url` | `FATSECRET_LEARNING_LESSON_PROGRESS_SAVE_URL` | Lesson progress save. |
+| `market_locale` | `FATSECRET_MARKET_LOCALE` | Food-search market index (`RU` finds Russian foods). |
+| `language_locale` | `FATSECRET_LANGUAGE_LOCALE` | UI language sent to modern indexes. |
 | `server_base` | `FATSECRET_SERVER_BASE` | Legacy endpoint base; include a trailing slash. |
 
-Default modern endpoints are under `https://app.ftscrt.com/`; the legacy base is `https://android.fatsecret.com/android/`. Attributes, block lists, and learning use fixed modern URLs and have no endpoint override. Changing `server_base` does not redirect every request.
+Manage the file without editing TOML by hand:
 
-Endpoint overrides are intended for controlled debugging. They can send passwords or account credentials to the configured destination. Do not use an untrusted config file or endpoint.
+```sh
+fatsecret-cli config show
+fatsecret-cli config set market_locale RU
+fatsecret-cli config unset market_locale
+fatsecret-cli config path
+```
+
+`config show` masks the device id. Values set with `config set` beat built-in
+defaults but lose to `FATSECRET_*` environment variables.
+
+Default modern endpoints are under `https://app.ftscrt.com/`; the legacy base is `https://android.fatsecret.com/android/`. Attributes, block-list reads, and learning reads use fixed modern URLs with no endpoint override. Changing `server_base` does not redirect every request.
 
 Changing `--config` does not relocate credentials or device identity and does not select a separate account profile.
 
