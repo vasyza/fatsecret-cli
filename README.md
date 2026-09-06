@@ -174,9 +174,10 @@ Search pages are zero-based. `--market` applies only to cookbook count; it is no
 
 | Command | Behavior and defaults |
 | --- | --- |
-| `diary day [--date YYYY-MM-DD]` | Read the current server day with entry rows, IDs, per-entry macros (protein/carbs/fat/fiber), servings, and day totals. Any date different from the CLI's computed "today" is rejected locally; this is not historical lookup. |
+| `diary day [--date YYYY-MM-DD]` | Read any day's entries with IDs, macros, servings, and day totals. History works (same page + day selector). |
 | `diary add --food-id ID --serving-id ID [--meal other] [--meal-id ID] [--date YYYY-MM-DD] [--units 1]` | Add a food using the selected serving. Prefer an explicit date. |
 | `diary rm ENTRY_ID [--date YYYY-MM-DD]` | Delete an entry ID shown by `diary day`. `--date` is the recorded date (default today). No confirmation prompt. |
+| `diary cp --from YYYY-MM-DD [--date YYYY-MM-DD]` | Copy a day's entries onto another date (same meals, fresh IDs). |
 
 `--units` is a serving multiplier, not grams. Use a gram-based portion if you want to enter a mass. Meal names are case-insensitive:
 
@@ -390,8 +391,7 @@ A missing installation identity caused this generic login error in earlier live 
 ### Diary date or entry IDs are wrong or missing
 
 Default diary dates are the current UTC calendar day (floored Unix epoch days). That matches `recordedDate`/`dateInt`. Local timezone is not used. Pass `--date YYYY-MM-DD` on `diary add` and `diary rm` when you want a specific civil date.
-
-`diary day` reads the server current day only. A `--date` other than today is rejected: history is not supported. The page is read as a form POST like the app; a GET returns only the `{dateint, guid}` shell.
+`diary day` reads any server day: pass `--date YYYY-MM-DD` for history (same page + day selector). The page is read as a form POST like the app; a GET returns only the `{dateint, guid}` shell.
 
 Date parsing rejects impossible calendar dates (including February 29 on non-leap years) but stays lenient on padding and extra segments. Supply a real `YYYY-MM-DD` date.
 

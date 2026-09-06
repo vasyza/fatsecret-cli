@@ -75,11 +75,13 @@ fn diary_day_help_mentions_history() {
         .args(["diary", "day", "--help"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("History is unsupported"));
+        .stdout(predicate::str::contains("history supported"));
 }
 
 #[test]
-fn diary_day_rejects_past_date_offline() {
+fn diary_day_past_date_reaches_network_offline() {
+    // History is supported: a past date passes validation and fails closed
+    // at auth when offline, never on the date itself.
     Command::cargo_bin("fatsecret-cli")
         .unwrap()
         .env("XDG_CONFIG_HOME", "/nonexistent-xdg-fatsecret-cli")
@@ -91,9 +93,10 @@ fn diary_day_rejects_past_date_offline() {
         .args(["diary", "day", "--date", "2000-01-01"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains(
-            "diary history is not supported by the known endpoint; omit --date to read the server current day",
-        ));
+        .stderr(
+            predicate::str::contains("not logged in")
+                .or(predicate::str::contains("no device model")),
+        );
 }
 
 #[test]

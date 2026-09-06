@@ -70,16 +70,47 @@ pub(crate) fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 pub async fn run(client: &FsClient, format: OutputFormat, args: DiaryArgs) -> Result<()> {
     match args.action {
         DiaryAction::Day { date } => {
-            if let Some(d) = &date
-                && *d != today_ymd()
-            {
-                return Err(AppError::Msg(
-                    "diary history is not supported by the known endpoint; omit --date to read the server current day".to_string(),
-                ));
-            }
-            let v = client.diary_day().await?;
+            let (_, recorded) = recorded_date(&date)?;
+            let v = client.diary_day(recorded).await?;
             let (human, plain) = render_diary_day(&v);
             emit(format, human.trim_end(), plain.trim_end(), &v)
+        }
+        DiaryAction::Cp { from, date } => {
+            let (_, recorded_from) = recorded_date(&Some(from))?;
+            let (_, recorded) = recorded_date(&date)?;
+            let src = client.diary_day(recorded_from).await?;
+            let entries = day_entries(&src);
+            if entries.is_empty() {
+                return Err(AppError::Msg(
+                    "nothing to copy: source day has no entries".to_string(),
+                ));
+            }
+            let mut copied = 0;
+            for e in entries {
+                let entry = journal_entry(
+                    0,
+                    entry_i64(e, "recipeid"),
+                    &entry_str(e, "name"),
+                    entry_i64(e, "recipeportionid"),
+                    entry_f64(e, "portionamount"),
+                    entry_i64(e, "meal"),
+                    "",
+                );
+                let v = client.journal_update(recorded, &[entry], &[]).await?;
+                if let Some(detail) = journal_failed_entries(&v) {
+                    return Err(AppError::Api {
+                        code: "200".to_string(),
+                        message: detail,
+                    });
+                }
+                copied += 1;
+            }
+            emit(
+                format,
+                &format!("copied {copied} entries"),
+                "OK",
+                &serde_json::json!({"copied": copied}),
+            )
         }
         DiaryAction::Add {
             food_id,
@@ -129,6 +160,45 @@ fn as_text(v: &serde_json::Value) -> Option<&str> {
         }
         _ => None,
     }
+}
+
+/// Entry rows of a day payload (`recipejournalentry` list or single object).
+fn day_entries(v: &serde_json::Value) -> Vec<&serde_json::Value> {
+    match v.get("recipejournalentry") {
+        Some(serde_json::Value::Array(items)) => items.iter().collect(),
+        Some(single) if single.is_object() => vec![single],
+        _ => vec![],
+    }
+}
+
+/// Numeric entry field tolerating string-or-number wire values.
+fn entry_i64(e: &serde_json::Value, key: &str) -> i64 {
+    e.get(key)
+        .and_then(|v| {
+            v.as_i64().or_else(|| {
+                v.as_str()
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .map(|n| n as i64)
+            })
+        })
+        .unwrap_or(0)
+}
+
+/// Float entry field tolerating string-or-number wire values.
+fn entry_f64(e: &serde_json::Value, key: &str) -> f64 {
+    e.get(key)
+        .and_then(|v| {
+            v.as_f64()
+                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+        })
+        .unwrap_or(1.0)
+}
+
+/// Text entry field with `?` fallback (matches `diary add` behavior).
+fn entry_str(e: &serde_json::Value, key: &str) -> String {
+    e.get(key)
+        .and_then(|v| as_text(v).map(|s| s.to_string()))
+        .unwrap_or("?".to_string())
 }
 
 /// Server-side per-entry failures from `update-journal-entries`.
@@ -202,5 +272,33 @@ mod tests {
         assert!(detail.contains("200"), "code: {detail}");
         assert!(journal_failed_entries(&serde_json::json!({"failedEntries": []})).is_none());
         assert!(journal_failed_entries(&serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn history_dates_resolve_to_days() {
+        // Past dates are valid day selectors (same page + dt on the wire).
+        assert!(date_to_days("2000-01-01").unwrap() < date_to_days("2026-09-05").unwrap());
+        let (_, recorded) = recorded_date(&Some("2026-09-04".to_string())).unwrap();
+        assert_eq!(recorded, date_to_days("2026-09-05").unwrap() - 1);
+    }
+
+    #[test]
+    fn extracts_copyable_entries() {
+        let v = serde_json::json!({
+            "dateint": "20700",
+            "recipejournalentry": [
+                {"id": "1", "recipeid": "39715", "name": "Oats",
+                 "recipeportionid": 62446, "portionamount": "3.25", "meal": "1"},
+            ],
+        });
+        let entries = day_entries(&v);
+        assert_eq!(entries.len(), 1);
+        let e = entries[0];
+        assert_eq!(entry_i64(e, "recipeid"), 39715);
+        assert_eq!(entry_i64(e, "recipeportionid"), 62446);
+        assert_eq!(entry_i64(e, "meal"), 1);
+        assert!((entry_f64(e, "portionamount") - 3.25).abs() < 1e-9);
+        assert_eq!(entry_str(e, "name"), "Oats");
+        assert!(day_entries(&serde_json::json!({"dateint": "20701"})).is_empty());
     }
 }

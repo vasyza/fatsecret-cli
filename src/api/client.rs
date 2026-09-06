@@ -61,6 +61,17 @@ impl FsClient {
     /// The body carries the app-equivalent prefix (`c_id/c_fl/c_s/c_d`, `dt`,
     /// `app_version`, `unit`) ahead of the caller params.
     async fn post_form(&self, url: &str, params: &[(&str, &str)]) -> Result<Value> {
+        self.post_form_dated(url, crate::auth::device::today_days(), params)
+            .await
+    }
+
+    /// `post_form` with an explicit day number (diary history reads).
+    async fn post_form_dated(
+        &self,
+        url: &str,
+        days: i64,
+        params: &[(&str, &str)],
+    ) -> Result<Value> {
         let Some(t) = &self.creds else {
             return Err(AppError::NotLoggedIn);
         };
@@ -69,10 +80,7 @@ impl FsClient {
             ("c_fl".to_string(), "1".to_string()),
             ("c_s".to_string(), t.secret_key.clone()),
             ("c_d".to_string(), t.device_key.clone()),
-            (
-                "dt".to_string(),
-                crate::auth::device::today_days().to_string(),
-            ),
+            ("dt".to_string(), days.to_string()),
             ("app_version".to_string(), self.app.app_version.clone()),
             ("unit".to_string(), "kj".to_string()),
         ];
@@ -205,14 +213,6 @@ impl FsClient {
             .await
     }
 
-    /// Diary day: POST `RecipeJournalDayAndroidPage.aspx` with `{fl: 7}`.
-    /// The app sends legacy reads as form POSTs with body credentials;
-    /// the same page over GET returns only the shell (`{dateint, guid}`).
-    pub async fn diary_day(&self) -> Result<Value> {
-        let url = format!("{}RecipeJournalDayAndroidPage.aspx", self.app.server_base);
-        self.post_form(&url, &[("fl", "7")]).await
-    }
-
     /// Dietary-preference vote: `POST {food_vote_url}` with
     /// `{recipeid, votes: [{typeId, value}]}`.
     pub async fn vote_preference(&self, recipe_id: i64, votes: &[(i64, String)]) -> Result<Value> {
@@ -226,6 +226,15 @@ impl FsClient {
         let body = serde_json::json!({ "barcode": gtin, "deviceCanPrompt": false });
         let url = self.app.scan_url.clone();
         self.post_json(&url, &body).await
+    }
+
+    /// Diary day: POST `RecipeJournalDayAndroidPage.aspx` with `{fl: 7}`.
+    /// The app sends legacy reads as form POSTs with body credentials;
+    /// the same page over GET returns only the `{dateint, guid}` shell.
+    /// `days` selects the civil day (history included: same page + `dt`).
+    pub async fn diary_day(&self, days: i64) -> Result<Value> {
+        let url = format!("{}RecipeJournalDayAndroidPage.aspx", self.app.server_base);
+        self.post_form_dated(&url, days, &[("fl", "7")]).await
     }
 
     /// Journal bulk update: `POST {journal_url}` with

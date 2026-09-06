@@ -154,9 +154,18 @@ pub struct DiaryArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum DiaryAction {
-    /// Show the diary day (default today)
+    /// Show the diary day (default today); history supported
     Day {
-        /// Date YYYY-MM-DD; must equal today. History is unsupported.
+        /// Date YYYY-MM-DD (default today)
+        #[arg(long)]
+        date: Option<String>,
+    },
+    /// Copy a day's entries onto another date (same meals, fresh ids)
+    Cp {
+        /// Source date YYYY-MM-DD
+        #[arg(long)]
+        from: String,
+        /// Target date YYYY-MM-DD (default today)
         #[arg(long)]
         date: Option<String>,
     },
