@@ -34,12 +34,22 @@ pub async fn run_notifications(
 }
 
 pub async fn run_feed(client: &FsClient, format: OutputFormat, args: FeedArgs) -> Result<()> {
-    let v = match args.action {
-        FeedAction::Blocks => client.feed_blocks().await?,
-        FeedAction::Blocking => client.feed_blocking().await?,
-    };
-    let (human, plain) = render_feed(&v);
-    emit(format, human.trim_end(), plain.trim_end(), &v)
+    match args.action {
+        FeedAction::Blocks => {
+            let v = client.feed_blocks().await?;
+            let (human, plain) = render_feed(&v);
+            emit(format, human.trim_end(), plain.trim_end(), &v)
+        }
+        FeedAction::Blocking => {
+            let v = client.feed_blocking().await?;
+            let (human, plain) = render_feed(&v);
+            emit(format, human.trim_end(), plain.trim_end(), &v)
+        }
+        FeedAction::Block { user_id } => {
+            let v = client.feed_block_add(user_id).await?;
+            emit(format, "user blocked", "OK", &v)
+        }
+    }
 }
 
 pub async fn run_learning(
@@ -47,11 +57,36 @@ pub async fn run_learning(
     format: OutputFormat,
     args: LearningArgs,
 ) -> Result<()> {
-    let v = match args.action {
-        LearningAction::Progress => client.learning_progress().await?,
-        LearningAction::Content => client.learning_content().await?,
-    };
-    emit(format, "learning data (see --format json)", "", &v)
+    match args.action {
+        LearningAction::Progress => {
+            let v = client.learning_progress().await?;
+            emit(format, "learning data (see --format json)", "", &v)
+        }
+        LearningAction::Content => {
+            let v = client.learning_content().await?;
+            emit(format, "learning data (see --format json)", "", &v)
+        }
+        LearningAction::BookmarkCourse { id } => {
+            let v = client.learning_course_bookmark(id, true).await?;
+            emit(format, "course bookmarked", "OK", &v)
+        }
+        LearningAction::UnbookmarkCourse { id } => {
+            let v = client.learning_course_bookmark(id, false).await?;
+            emit(format, "course unbookmarked", "OK", &v)
+        }
+        LearningAction::BookmarkLesson { id } => {
+            let v = client.learning_lesson_bookmark(id, true).await?;
+            emit(format, "lesson bookmarked", "OK", &v)
+        }
+        LearningAction::UnbookmarkLesson { id } => {
+            let v = client.learning_lesson_bookmark(id, false).await?;
+            emit(format, "lesson unbookmarked", "OK", &v)
+        }
+        LearningAction::CompleteLesson { id } => {
+            let v = client.learning_lesson_progress(id).await?;
+            emit(format, "lesson completed", "OK", &v)
+        }
+    }
 }
 
 pub async fn run_food_groups(

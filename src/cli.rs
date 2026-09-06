@@ -47,13 +47,16 @@ pub enum Commands {
     Diary(DiaryArgs),
     /// Body weight
     Weight(WeightArgs),
+    /// Daily calorie target (RDI)
+    Rdi(RdiArgs),
     /// Exercise diary
     Exercise(ExerciseArgs),
     /// Water tracker (requires FatSecret Premium)
     Water(WaterArgs),
     /// Saved meals
     Meals(MealArgs),
-    /// Account details and settings
+    /// Multi-day meal plans
+    MealPlans(MealPlansArgs),
     Account(AccountArgs),
     /// User settings and attributes
     Settings(SettingsArgs),
@@ -219,6 +222,42 @@ pub enum WeightAction {
 }
 
 #[derive(Args, Debug)]
+pub struct RdiArgs {
+    #[command(subcommand)]
+    pub action: RdiAction,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum RdiAction {
+    /// Show the current daily calorie target
+    Show,
+    /// Save the daily calorie target
+    Save {
+        /// Age in years
+        #[arg(long)]
+        age: i64,
+        /// Weight in kilograms
+        #[arg(long)]
+        weight_kg: f64,
+        /// Height in centimeters
+        #[arg(long)]
+        height_cm: f64,
+        /// Sex: female|male
+        #[arg(long)]
+        sex: String,
+        /// Goal: maintain|gain|gain-slow|lose-slow|lose
+        #[arg(long)]
+        goal: String,
+        /// Activity: sedentary|low|active|high
+        #[arg(long)]
+        activity: String,
+        /// Target calories per day
+        #[arg(long)]
+        rdi: i64,
+    },
+}
+
+#[derive(Args, Debug)]
 pub struct ExerciseArgs {
     #[command(subcommand)]
     pub action: ExerciseAction,
@@ -356,6 +395,55 @@ pub enum MealAction {
     },
     /// Quick picks list
     Quickpicks,
+    /// Duplicate a saved meal under a new title
+    Duplicate {
+        /// Source saved meal id
+        #[arg(long)]
+        id: i64,
+        /// Title for the copy
+        #[arg(long)]
+        title: String,
+        /// Description for the copy
+        #[arg(long, default_value = "")]
+        description: String,
+        /// Meal types mask
+        #[arg(long, default_value = "1")]
+        meal_types: String,
+    },
+}
+
+#[derive(Args, Debug)]
+pub struct MealPlansArgs {
+    #[command(subcommand)]
+    pub action: MealPlansAction,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum MealPlansAction {
+    /// Save a meal plan (create with --plan-id 0)
+    Save {
+        /// Plan id (0 to create)
+        #[arg(long, default_value_t = 0)]
+        plan_id: i64,
+        /// Plan name
+        #[arg(long, default_value = "")]
+        name: String,
+        /// Plan description
+        #[arg(long, default_value = "")]
+        description: String,
+        /// Entry as DAY:RECIPE:PORTION:AMOUNT:MEAL:NAME, repeatable
+        #[arg(long = "entry", value_name = "DAY:RECIPE:PORTION:AMOUNT:MEAL:NAME")]
+        entries: Vec<String>,
+    },
+    /// Schedule plan weeks (insert/delete PLAN:DAYINT pairs)
+    Schedule {
+        /// Insert as PLAN:DAYINT, repeatable
+        #[arg(long = "insert", value_name = "PLAN:DAYINT")]
+        inserts: Vec<String>,
+        /// Delete as PLAN:DAYINT, repeatable
+        #[arg(long = "delete", value_name = "PLAN:DAYINT")]
+        deletes: Vec<String>,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -396,6 +484,11 @@ pub enum FeedAction {
     Blocks,
     /// Users you block
     Blocking,
+    /// Block a user by id (no unblock: the app has no wired call)
+    Block {
+        /// User id to block
+        user_id: i64,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -410,6 +503,31 @@ pub enum LearningAction {
     Progress,
     /// Learning content for your language
     Content,
+    /// Bookmark a guided course by content id
+    BookmarkCourse {
+        /// Guided course content id
+        id: i64,
+    },
+    /// Remove a guided course bookmark
+    UnbookmarkCourse {
+        /// Guided course content id
+        id: i64,
+    },
+    /// Bookmark a lesson by content id
+    BookmarkLesson {
+        /// Lesson content id
+        id: i64,
+    },
+    /// Remove a lesson bookmark
+    UnbookmarkLesson {
+        /// Lesson content id
+        id: i64,
+    },
+    /// Mark a lesson complete
+    CompleteLesson {
+        /// Lesson content id
+        id: i64,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -461,9 +579,92 @@ pub enum RecipesAction {
         #[arg(long, default_value = "US")]
         market: String,
     },
+    /// Create a recipe (returns the new id)
+    Create {
+        /// Title
+        #[arg(long)]
+        title: String,
+        /// Description
+        #[arg(long, default_value = "")]
+        description: String,
+        /// Servings count
+        #[arg(long, default_value_t = 1.0)]
+        portions: f64,
+        /// Prep time in minutes
+        #[arg(long, default_value_t = 0)]
+        prep_time: i64,
+        /// Cook time in minutes
+        #[arg(long, default_value_t = 0)]
+        cook_time: i64,
+    },
+    /// Edit a recipe (steps/types replace server state)
+    Save {
+        /// Recipe id
+        id: i64,
+        /// Title
+        #[arg(long)]
+        title: String,
+        /// Description
+        #[arg(long, default_value = "")]
+        description: String,
+        /// Servings count
+        #[arg(long, default_value_t = 1.0)]
+        portions: f64,
+        /// Prep time in minutes
+        #[arg(long, default_value_t = 0)]
+        prep_time: i64,
+        /// Cook time in minutes
+        #[arg(long, default_value_t = 0)]
+        cook_time: i64,
+        /// Share publicly (default private)
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        share: bool,
+        /// Step text, repeatable in order (step1, step2, ...)
+        #[arg(long = "step", value_name = "TEXT")]
+        steps: Vec<String>,
+        /// Recipe type id, repeatable
+        #[arg(long = "type", value_name = "ID")]
+        types: Vec<i64>,
+    },
+    /// Delete a recipe
+    Rm {
+        /// Recipe id
+        id: i64,
+    },
+    /// Add (or edit, with --item-id) an ingredient in a recipe
+    AddIngredient {
+        /// Parent recipe id
+        #[arg(long)]
+        recipe_id: i64,
+        /// Food id from search
+        #[arg(long)]
+        food_id: i64,
+        /// Entry name
+        #[arg(long)]
+        name: String,
+        /// Portion id from food details
+        #[arg(long)]
+        portion_id: i64,
+        /// Number of servings
+        #[arg(long, default_value_t = 1.0)]
+        units: f64,
+        /// Existing ingredient id (edit instead of add)
+        #[arg(long, default_value_t = 0)]
+        item_id: i64,
+    },
+    /// Delete an ingredient from a recipe
+    RmIngredient {
+        /// Ingredient id
+        #[arg(long)]
+        item_id: i64,
+        /// Parent recipe id
+        #[arg(long)]
+        recipe_id: i64,
+    },
 }
 
 #[derive(Subcommand, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum FoodsAction {
     /// Search the food database
     Search {
@@ -502,6 +703,57 @@ pub enum FoodsAction {
     },
     /// List dietary-preference/allergen types for votes
     PreferenceTypes,
+    /// Create a custom food (own recipe entry)
+    Create {
+        /// Product name
+        #[arg(long)]
+        name: String,
+        /// Serving size text (e.g. "1 cup")
+        #[arg(long, default_value = "")]
+        serving_size: String,
+        /// Metric serving (e.g. "100g")
+        #[arg(long, default_value = "")]
+        metric_serving: String,
+        /// Brand / manufacturer name
+        #[arg(long, default_value = "")]
+        brand: String,
+        /// Manufacturer type ordinal (0 Own, 1 Manufacturer, 2 Restaurant, 3 Supermarket, 4 Brewer, 5 Other)
+        #[arg(long, default_value_t = 0)]
+        manufacturer_type: i64,
+        /// Pipe-separated tags
+        #[arg(long, default_value = "")]
+        tags: String,
+        /// Salt-based serving
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        is_salt: bool,
+        /// Barcode digits (optional)
+        #[arg(long, default_value = "")]
+        barcode: String,
+        /// Barcode type name (UPC_A|UPC_E|EAN_8|EAN_13|Other)
+        #[arg(long, default_value = "EAN_13")]
+        barcode_type: String,
+        /// Calories per serving
+        #[arg(long)]
+        calories: Option<f64>,
+        /// Protein grams per serving
+        #[arg(long)]
+        protein: Option<f64>,
+        /// Carbohydrate grams per serving
+        #[arg(long)]
+        carbs: Option<f64>,
+        /// Fat grams per serving
+        #[arg(long)]
+        fat: Option<f64>,
+        /// Fiber grams per serving
+        #[arg(long)]
+        fiber: Option<f64>,
+        /// Sugar grams per serving
+        #[arg(long)]
+        sugar: Option<f64>,
+        /// Sodium milligrams per serving
+        #[arg(long)]
+        sodium: Option<f64>,
+    },
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, Default)]

@@ -267,6 +267,19 @@ impl FsClient {
         self.post_json(&url, &body).await
     }
 
+    /// Custom food create: POST `RecipeCustomEntryActionAndroidPage.aspx`
+    /// with `action=saveregional` plus nutrition/meta pairs (no photo upload;
+    /// that is a separate image path).
+    pub async fn food_create(&self, food: &CustomFood) -> Result<Value> {
+        let url = self.legacy("RecipeCustomEntryActionAndroidPage.aspx");
+        let params = custom_food_params(food);
+        let refs: Vec<(&str, &str)> = params
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        self.post_form(&url, &refs).await
+    }
+
     /// Recipe search: authed GET `RecipeSearch.aspx` with `{fl:2, q, pg}`.
     pub async fn recipes_search(&self, query: &str, page: i64) -> Result<Value> {
         let page = page.to_string();
@@ -278,6 +291,134 @@ impl FsClient {
     /// Recipe details: same page as food details (`RecipeAndroidPage.aspx`).
     pub async fn recipe_get(&self, id: i64) -> Result<Value> {
         self.food_get(id).await
+    }
+
+    /// Recipe create: POST `RecipeActionAndroidPage.aspx` with
+    /// `{action:recipeinitialsave, prid:0, ...}` plus `fl=7`. The bare
+    /// response carries the new id after a colon.
+    pub async fn recipe_create(
+        &self,
+        title: &str,
+        description: &str,
+        portions: f64,
+        prep_mins: i64,
+        cook_mins: i64,
+    ) -> Result<Value> {
+        let url = self.legacy("RecipeActionAndroidPage.aspx");
+        self.post_form(
+            &url,
+            &[
+                ("action", "recipeinitialsave"),
+                ("prid", "0"),
+                ("title", title),
+                ("description", description),
+                ("portions", &portions.to_string()),
+                ("preptime", &prep_mins.to_string()),
+                ("cooktime", &cook_mins.to_string()),
+                ("fl", "7"),
+            ],
+        )
+        .await
+    }
+
+    /// Recipe edit: POST `RecipeActionAndroidPage.aspx` with
+    /// `{action:recipesave, prid, ..., {typeId}_type, step{N}}` plus `fl=7`.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn recipe_save(
+        &self,
+        id: i64,
+        title: &str,
+        description: &str,
+        portions: f64,
+        prep_mins: i64,
+        cook_mins: i64,
+        share: bool,
+        steps: &[String],
+        types: &[i64],
+    ) -> Result<Value> {
+        let url = self.legacy("RecipeActionAndroidPage.aspx");
+        let mut params: Vec<(String, String)> = vec![
+            ("action".to_string(), "recipesave".to_string()),
+            ("prid".to_string(), id.to_string()),
+            ("title".to_string(), title.to_string()),
+            ("description".to_string(), description.to_string()),
+            ("portions".to_string(), portions.to_string()),
+            ("preptime".to_string(), prep_mins.to_string()),
+            ("cooktime".to_string(), cook_mins.to_string()),
+            ("osharing".to_string(), share.to_string()),
+        ];
+        for t in types {
+            params.push((format!("{t}_type"), t.to_string()));
+        }
+        for (i, step) in steps.iter().enumerate() {
+            params.push((format!("step{}", i + 1), step.clone()));
+        }
+        params.push(("fl".to_string(), "7".to_string()));
+        let refs: Vec<(&str, &str)> = params
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        self.post_form(&url, &refs).await
+    }
+
+    /// Recipe delete: POST `RecipeActionAndroidPage.aspx` with
+    /// `{action:recipedelete, rid, fl:5}` (note `rid`, not `prid`).
+    pub async fn recipe_rm(&self, id: i64) -> Result<Value> {
+        let url = self.legacy("RecipeActionAndroidPage.aspx");
+        self.post_form(
+            &url,
+            &[
+                ("action", "recipedelete"),
+                ("rid", &id.to_string()),
+                ("fl", "5"),
+            ],
+        )
+        .await
+    }
+
+    /// Recipe ingredient save: POST `RecipeActionAndroidPage.aspx` with
+    /// `{action:ingredientsave, fl:5, prid, rid, iid, entryname, portionid,
+    /// portionamount}`.
+    pub async fn recipe_add_ingredient(
+        &self,
+        recipe_id: i64,
+        item_id: i64,
+        food_id: i64,
+        name: &str,
+        portion_id: i64,
+        units: f64,
+    ) -> Result<Value> {
+        let url = self.legacy("RecipeActionAndroidPage.aspx");
+        self.post_form(
+            &url,
+            &[
+                ("action", "ingredientsave"),
+                ("fl", "5"),
+                ("prid", &recipe_id.to_string()),
+                ("rid", &food_id.to_string()),
+                ("iid", &item_id.to_string()),
+                ("entryname", name),
+                ("portionid", &portion_id.to_string()),
+                ("portionamount", &units.to_string()),
+            ],
+        )
+        .await
+    }
+
+    /// Recipe ingredient delete: POST `RecipeActionAndroidPage.aspx` with
+    /// `{action:ingredientdelete, fl:5, iid, prid}`.
+    pub async fn recipe_rm_ingredient(&self, item_id: i64, recipe_id: i64) -> Result<Value> {
+        let url = self.legacy("RecipeActionAndroidPage.aspx");
+        self.post_form(
+            &url,
+            &[
+                ("action", "ingredientdelete"),
+                ("fl", "5"),
+                ("iid", &item_id.to_string()),
+                ("prid", &recipe_id.to_string()),
+            ],
+        )
+        .await
     }
 
     /// Recipe categories: authed GET `RecipeTypeAndroidPage.aspx`, no params.
@@ -351,6 +492,14 @@ impl FsClient {
         .await
     }
 
+    /// Block a user: authed POST `add-user-block` with `{blockUserId}`.
+    /// No unblock call: `remove-user-block` exists in resources but nothing
+    /// wires it in this APK build, and probing would mutate live block state.
+    pub async fn feed_block_add(&self, user_id: i64) -> Result<Value> {
+        let body = serde_json::json!({ "blockUserId": user_id });
+        self.post_json(&self.app.feed_add_block_url, &body).await
+    }
+
     /// Learning progress: authed POST `user/get` with `{}`.
     pub async fn learning_progress(&self) -> Result<Value> {
         self.post_json(
@@ -367,6 +516,34 @@ impl FsClient {
             &serde_json::json!({}),
         )
         .await
+    }
+
+    /// Course bookmark save/delete: `{guidedCourseContentId: id}`.
+    pub async fn learning_course_bookmark(&self, id: i64, save: bool) -> Result<Value> {
+        let url = if save {
+            &self.app.learning_course_bookmark_save_url
+        } else {
+            &self.app.learning_course_bookmark_delete_url
+        };
+        self.post_json(url, &learning_bookmark_body(true, id)).await
+    }
+
+    /// Lesson bookmark save/delete: `{lessonContentId: id}`.
+    pub async fn learning_lesson_bookmark(&self, id: i64, save: bool) -> Result<Value> {
+        let url = if save {
+            &self.app.learning_lesson_bookmark_save_url
+        } else {
+            &self.app.learning_lesson_bookmark_delete_url
+        };
+        self.post_json(url, &learning_bookmark_body(false, id))
+            .await
+    }
+
+    /// Lesson progress (mark complete): `{lessonContentId: id}`.
+    pub async fn learning_lesson_progress(&self, id: i64) -> Result<Value> {
+        let url = &self.app.learning_lesson_progress_save_url;
+        self.post_json(url, &learning_bookmark_body(false, id))
+            .await
     }
 
     /// Static food-groups data: authed GET `{server_base}FoodGroupsData.json`.
@@ -425,6 +602,29 @@ impl FsClient {
         .await
     }
 
+    /// Saved meal duplicate: POST `{action:duplicate, meal, title,
+    /// description, mealtypes}` (source server id in `meal`; no `mealid`).
+    pub async fn meal_duplicate(
+        &self,
+        id: i64,
+        title: &str,
+        description: &str,
+        meal_types: &str,
+    ) -> Result<Value> {
+        let url = self.legacy("SavedMealActionAndroidPage.aspx");
+        self.post_form(
+            &url,
+            &[
+                ("action", "duplicate"),
+                ("meal", &id.to_string()),
+                ("title", title),
+                ("description", description),
+                ("mealtypes", meal_types),
+            ],
+        )
+        .await
+    }
+
     /// Log a saved meal into the diary: POST `{action:add, mealid, meal}`.
     pub async fn meal_log(&self, meal_id: i64, meal: i64) -> Result<Value> {
         let url = self.legacy("SavedMealActionAndroidPage.aspx");
@@ -476,6 +676,38 @@ impl FsClient {
         .await
     }
 
+    /// Meal plan save: POST `MealPlanActionAndroidPage.aspx?action=save&fl=2`
+    /// with a JSON body (hybrid transport: form query + JSON, like the app).
+    pub async fn meal_plan_save(
+        &self,
+        plan_id: i64,
+        name: &str,
+        description: &str,
+        entries: &[PlanEntry],
+    ) -> Result<Value> {
+        let url = format!(
+            "{}MealPlanActionAndroidPage.aspx?action=save&fl=2",
+            self.app.server_base
+        );
+        let body = meal_plan_body(plan_id, name, description, entries);
+        self.post_json(&url, &body).await
+    }
+
+    /// Meal plan schedule: POST `MealPlanActionAndroidPage.aspx` with
+    /// `action=schedule&fl=2` plus `{inserts, deletes}` of plan date ints.
+    pub async fn meal_plan_schedule(
+        &self,
+        inserts: &[(i64, i64)],
+        deletes: &[(i64, i64)],
+    ) -> Result<Value> {
+        let url = format!(
+            "{}MealPlanActionAndroidPage.aspx?action=schedule&fl=2",
+            self.app.server_base
+        );
+        let body = meal_plan_schedule_body(inserts, deletes);
+        self.post_json(&url, &body).await
+    }
+
     /// Quick picks: `QuickPicksAndroidPage.aspx`, no params.
     pub async fn quick_picks(&self) -> Result<Value> {
         let url = self.legacy("QuickPicksAndroidPage.aspx");
@@ -493,6 +725,45 @@ impl FsClient {
                 ("goalWeightKg", &goal_kg.to_string()),
                 ("journal", ""),
                 ("reset", "false"),
+            ],
+        )
+        .await
+    }
+
+    /// RDI read: POST `RecommendedDailyIntakeAndroidPage.aspx`, no app params.
+    /// Response keys are lowercase scalars (`weightkg`, `rdi`, ...).
+    pub async fn rdi_show(&self) -> Result<Value> {
+        let url = self.legacy("RecommendedDailyIntakeAndroidPage.aspx");
+        self.post_form(&url, &[]).await
+    }
+
+    /// RDI save: POST `RecommendedDailyIntakeActionAndroidPage.aspx` with
+    /// `{todaydt, action:save, ageInYears, weightKg, heightCm, sex, goal,
+    /// activityLevel, rdi}`; sex/goal/activity are server ordinals.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn rdi_save(
+        &self,
+        age: i64,
+        weight_kg: f64,
+        height_cm: f64,
+        sex: i64,
+        goal: i64,
+        activity: i64,
+        rdi: i64,
+    ) -> Result<Value> {
+        let url = self.legacy("RecommendedDailyIntakeActionAndroidPage.aspx");
+        self.post_form(
+            &url,
+            &[
+                ("todaydt", &crate::auth::device::today_days().to_string()),
+                ("action", "save"),
+                ("ageInYears", &age.to_string()),
+                ("weightKg", &weight_kg.to_string()),
+                ("heightCm", &height_cm.to_string()),
+                ("sex", &sex.to_string()),
+                ("goal", &goal.to_string()),
+                ("activityLevel", &activity.to_string()),
+                ("rdi", &rdi.to_string()),
             ],
         )
         .await
@@ -579,6 +850,140 @@ impl FsClient {
     }
 }
 
+/// One meal-plan day entry: day index + food reference.
+pub struct PlanEntry {
+    pub day: i64,
+    pub recipe_id: i64,
+    pub portion_id: i64,
+    pub amount: f64,
+    pub meal: i64,
+    pub name: String,
+}
+
+/// Parse `--entry DAY:RECIPE:PORTION:AMOUNT:MEAL:NAME` (colon split in six so
+/// names may contain colons).
+pub fn parse_plan_entry(s: &str) -> crate::error::Result<PlanEntry> {
+    let mut parts = s.splitn(6, ':');
+    let num = |p: Option<&str>, what: &str| -> crate::error::Result<f64> {
+        p.unwrap_or("").trim().parse().map_err(|_| {
+            crate::error::AppError::Msg(format!(
+                "bad --entry {s:?}, want DAY:RECIPE:PORTION:AMOUNT:MEAL:NAME ({what})"
+            ))
+        })
+    };
+    let day = num(parts.next(), "day")? as i64;
+    let recipe_id = num(parts.next(), "recipe")? as i64;
+    let portion_id = num(parts.next(), "portion")? as i64;
+    let amount = num(parts.next(), "amount")?;
+    let meal = num(parts.next(), "meal")? as i64;
+    let name = parts.next().unwrap_or("").trim().to_string();
+    if name.is_empty() {
+        return Err(crate::error::AppError::Msg(format!(
+            "bad --entry {s:?}, want DAY:RECIPE:PORTION:AMOUNT:MEAL:NAME"
+        )));
+    }
+    Ok(PlanEntry {
+        day,
+        recipe_id,
+        portion_id,
+        amount,
+        meal,
+        name,
+    })
+}
+
+/// Parse `--insert/--delete PLAN:DAYINT` pairs.
+pub fn parse_plan_day(s: &str, flag: &str) -> crate::error::Result<(i64, i64)> {
+    let (p, d) = s.split_once(':').ok_or_else(|| {
+        crate::error::AppError::Msg(format!("bad {flag} {s:?}, want PLAN:DAYINT"))
+    })?;
+    let plan = p
+        .trim()
+        .parse::<i64>()
+        .map_err(|_| crate::error::AppError::Msg(format!("bad {flag} {s:?}, want PLAN:DAYINT")))?;
+    let day = d
+        .trim()
+        .parse::<i64>()
+        .map_err(|_| crate::error::AppError::Msg(format!("bad {flag} {s:?}, want PLAN:DAYINT")))?;
+    Ok((plan, day))
+}
+
+/// Meal-plan save body: `mealPlanId`/`name`/`description` only when set,
+/// entries grouped by day in flag order (`meal` omitted when 0).
+pub fn meal_plan_body(plan_id: i64, name: &str, description: &str, entries: &[PlanEntry]) -> Value {
+    let mut obj = serde_json::Map::new();
+    if plan_id > 0 {
+        obj.insert("mealPlanId".to_string(), plan_id.into());
+    }
+    if !name.is_empty() {
+        obj.insert("name".to_string(), name.into());
+    }
+    if !description.is_empty() {
+        obj.insert("description".to_string(), description.into());
+    }
+    let mut days: Vec<i64> = vec![];
+    for e in entries {
+        if !days.contains(&e.day) {
+            days.push(e.day);
+        }
+    }
+    let day_objs: Vec<Value> = days
+        .iter()
+        .map(|day| {
+            let rows: Vec<Value> = entries
+                .iter()
+                .filter(|e| e.day == *day)
+                .map(|e| {
+                    let mut row = serde_json::Map::new();
+                    row.insert("recipeId".to_string(), e.recipe_id.into());
+                    if e.meal != 0 {
+                        row.insert("meal".to_string(), e.meal.into());
+                    }
+                    row.insert("name".to_string(), e.name.clone().into());
+                    row.insert("recipeportionId".to_string(), e.portion_id.into());
+                    row.insert(
+                        "portionAmount".to_string(),
+                        serde_json::Number::from_f64(e.amount).map_or(Value::Null, Value::Number),
+                    );
+                    Value::Object(row)
+                })
+                .collect();
+            serde_json::json!({ "day": day, "dailyRecipeEntries": rows })
+        })
+        .collect();
+    obj.insert("days".to_string(), day_objs.into());
+    Value::Object(obj)
+}
+
+/// Meal-plan schedule body: inserts/deletes grouped by plan, date ints as
+/// strings, `mealPlanId` only when greater than 0.
+pub fn meal_plan_schedule_body(inserts: &[(i64, i64)], deletes: &[(i64, i64)]) -> Value {
+    fn group(pairs: &[(i64, i64)]) -> Vec<Value> {
+        let mut plans: Vec<i64> = vec![];
+        for (plan, _) in pairs {
+            if !plans.contains(plan) {
+                plans.push(*plan);
+            }
+        }
+        plans
+            .iter()
+            .map(|plan| {
+                let weeks: Vec<Value> = pairs
+                    .iter()
+                    .filter(|(p, _)| p == plan)
+                    .map(|(_, d)| serde_json::json!(d.to_string()))
+                    .collect();
+                if *plan > 0 {
+                    serde_json::json!({ "mealPlanId": plan, "weekNumber": weeks })
+                } else {
+                    serde_json::json!({ "weekNumber": weeks })
+                }
+            })
+            .collect()
+    }
+    serde_json::json!({ "inserts": group(inserts), "deletes": group(deletes) })
+}
+
 /// Diary entry object with the `DTORequestBulkUpdateRecipeJournalEntry` keys.
 /// `meal` is the server meal id (1=breakfast, 2=lunch, 3=dinner, 4=snack,
 /// 5=pre-breakfast, 6=second-breakfast); `id` is 0 for new entries.
@@ -610,6 +1015,81 @@ pub fn journal_entry(
     }
     Value::Object(obj)
 }
+
+/// Custom food fields for `action=saveregional`. Nutrition values are
+/// pre-rendered strings (number or `""` when unset — the app always sends
+/// every key). Calcium/iron/vitamin-A/C use the non-Mg names; the Mg/Mcg
+/// variants apply per market locale (unverified which market gates them).
+pub struct CustomFood {
+    pub serving_type: String,
+    pub serving_size: String,
+    pub calories: String,
+    pub total_fat: String,
+    pub saturated_fat: String,
+    pub cholesterol: String,
+    pub sodium: String,
+    pub potassium: String,
+    pub carbohydrate: String,
+    pub fiber: String,
+    pub sugar: String,
+    pub protein: String,
+    pub metric_serving_size: String,
+    pub calcium: String,
+    pub iron: String,
+    pub vitamin_a: String,
+    pub vitamin_c: String,
+    pub manufacturer_type: i64,
+    pub manufacturer_name: String,
+    pub product_name: String,
+    pub tags: String,
+    pub is_salt: bool,
+    pub barcode: String,
+    pub barcode_type: String,
+}
+
+/// App-ordered param grid: nutrition pairs first, then meta. Every nutrition
+/// key is always present (empty when unset); barcode pairs only with barcode.
+pub fn custom_food_params(food: &CustomFood) -> Vec<(String, String)> {
+    let mut params = vec![
+        ("servingType".to_string(), food.serving_type.clone()),
+        ("servingSize".to_string(), food.serving_size.clone()),
+        ("calories".to_string(), food.calories.clone()),
+        ("totalFat".to_string(), food.total_fat.clone()),
+        ("saturatedFat".to_string(), food.saturated_fat.clone()),
+        ("cholesterol".to_string(), food.cholesterol.clone()),
+        ("sodium".to_string(), food.sodium.clone()),
+        ("potassium".to_string(), food.potassium.clone()),
+        ("carbohydrate".to_string(), food.carbohydrate.clone()),
+        ("fiber".to_string(), food.fiber.clone()),
+        ("sugar".to_string(), food.sugar.clone()),
+        ("protein".to_string(), food.protein.clone()),
+        (
+            "metricServingSize".to_string(),
+            food.metric_serving_size.clone(),
+        ),
+        ("calcium".to_string(), food.calcium.clone()),
+        ("iron".to_string(), food.iron.clone()),
+        ("vitaminA".to_string(), food.vitamin_a.clone()),
+        ("vitaminC".to_string(), food.vitamin_c.clone()),
+        ("action".to_string(), "saveregional".to_string()),
+        (
+            "manufacturerType".to_string(),
+            food.manufacturer_type.to_string(),
+        ),
+        (
+            "manufacturerName".to_string(),
+            food.manufacturer_name.clone(),
+        ),
+        ("productName".to_string(), food.product_name.clone()),
+        ("tags".to_string(), food.tags.clone()),
+        ("isSalt".to_string(), food.is_salt.to_string()),
+    ];
+    if !food.barcode.is_empty() {
+        params.push(("barcode".to_string(), food.barcode.clone()));
+        params.push(("barcodeType".to_string(), food.barcode_type.clone()));
+    }
+    params
+}
 /// Vote body with the exact `FoodDietaryPreferenceVoteRequestDTO` key set.
 pub fn vote_body(recipe_id: i64, votes: &[(i64, String)]) -> Value {
     let votes: Vec<Value> = votes
@@ -617,6 +1097,16 @@ pub fn vote_body(recipe_id: i64, votes: &[(i64, String)]) -> Value {
         .map(|(t, v)| serde_json::json!({ "typeId": t, "value": v }))
         .collect();
     serde_json::json!({ "recipeid": recipe_id, "votes": votes })
+}
+
+/// Learning save body: `guidedCourseContentId` for courses,
+/// `lessonContentId` for lessons/progress (single-id DTO).
+pub fn learning_bookmark_body(course: bool, id: i64) -> Value {
+    if course {
+        serde_json::json!({ "guidedCourseContentId": id })
+    } else {
+        serde_json::json!({ "lessonContentId": id })
+    }
 }
 
 /// Response bodies are JSON on the modern generation and XML on legacy
@@ -1030,5 +1520,100 @@ mod tests {
         let v = parse_body(r#"{"ok":true}"#).unwrap();
         assert_eq!(unable_to_save_message(&v), None);
         assert_eq!(unable_to_save_message(&Value::Null), None);
+    }
+
+    #[test]
+    fn learning_bodies_use_exact_keys() {
+        assert_eq!(
+            learning_bookmark_body(true, 7),
+            serde_json::json!({ "guidedCourseContentId": 7 })
+        );
+        assert_eq!(
+            learning_bookmark_body(false, 9),
+            serde_json::json!({ "lessonContentId": 9 })
+        );
+    }
+
+    #[test]
+    fn custom_food_params_keep_app_order() {
+        let food = CustomFood {
+            serving_type: "".to_string(),
+            serving_size: "1 cup".to_string(),
+            calories: "100".to_string(),
+            total_fat: "".to_string(),
+            saturated_fat: "".to_string(),
+            cholesterol: "".to_string(),
+            sodium: "".to_string(),
+            potassium: "".to_string(),
+            carbohydrate: "".to_string(),
+            fiber: "".to_string(),
+            sugar: "".to_string(),
+            protein: "5".to_string(),
+            metric_serving_size: "100g".to_string(),
+            calcium: "".to_string(),
+            iron: "".to_string(),
+            vitamin_a: "".to_string(),
+            vitamin_c: "".to_string(),
+            manufacturer_type: 0,
+            manufacturer_name: "".to_string(),
+            product_name: "Probe".to_string(),
+            tags: "".to_string(),
+            is_salt: false,
+            barcode: "".to_string(),
+            barcode_type: "EAN_13".to_string(),
+        };
+        let params = custom_food_params(&food);
+        // Nutrition first, then meta; unset keys present-but-empty.
+        assert_eq!(params[0], ("servingType".to_string(), "".to_string()));
+        assert_eq!(params[1], ("servingSize".to_string(), "1 cup".to_string()));
+        assert!(params.iter().any(|(k, v)| k == "protein" && v == "5"));
+        let action = params.iter().find(|(k, _)| k == "action").unwrap();
+        assert_eq!(action.1, "saveregional");
+        assert!(!params.iter().any(|(k, _)| k == "barcode"));
+    }
+
+    #[test]
+    fn parses_plan_entries_and_days() {
+        let e = parse_plan_entry("1:39715:62446:2.0:1:Oats: hot").unwrap();
+        assert_eq!(
+            (e.day, e.recipe_id, e.portion_id, e.meal),
+            (1, 39715, 62446, 1)
+        );
+        assert!((e.amount - 2.0).abs() < 1e-9);
+        assert_eq!(e.name, "Oats: hot");
+        assert!(parse_plan_entry("garbage").is_err());
+        assert_eq!(parse_plan_day("5:20701", "--insert").unwrap(), (5, 20701));
+        assert!(parse_plan_day("nope", "--insert").is_err());
+    }
+
+    #[test]
+    fn meal_plan_bodies_omit_empties() {
+        let entries = vec![
+            PlanEntry {
+                day: 1,
+                recipe_id: 10,
+                portion_id: 20,
+                amount: 1.0,
+                meal: 1,
+                name: "A".to_string(),
+            },
+            PlanEntry {
+                day: 1,
+                recipe_id: 11,
+                portion_id: 21,
+                amount: 2.0,
+                meal: 0,
+                name: "B".to_string(),
+            },
+        ];
+        let v = meal_plan_body(0, "Week", "", &entries);
+        assert!(v.get("mealPlanId").is_none());
+        assert_eq!(v["name"], serde_json::json!("Week"));
+        assert!(v.get("description").is_none());
+        assert_eq!(v["days"][0]["dailyRecipeEntries"][1].get("meal"), None);
+        let v = meal_plan_schedule_body(&[(5, 20701)], &[]);
+        assert_eq!(v["inserts"][0]["mealPlanId"], serde_json::json!(5));
+        assert_eq!(v["inserts"][0]["weekNumber"], serde_json::json!(["20701"]));
+        assert_eq!(v["deletes"].as_array().unwrap().len(), 0);
     }
 }

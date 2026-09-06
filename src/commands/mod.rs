@@ -4,6 +4,7 @@ pub mod body_cmd;
 pub mod diary_cmd;
 pub mod food_cmd;
 pub mod meal_cmd;
+pub mod meal_plan_cmd;
 pub mod misc_cmd;
 pub mod recipe_cmd;
 
@@ -34,9 +35,11 @@ pub async fn dispatch(cli: Cli) -> Result<()> {
         Commands::Recipes(r) => recipe_cmd::run(&app_client(&app)?, format, r).await,
         Commands::Diary(d) => diary_cmd::run(&app_client(&app)?, format, d).await,
         Commands::Weight(w) => body_cmd::run_weight(&app_client(&app)?, format, w).await,
+        Commands::Rdi(r) => body_cmd::run_rdi(&app_client(&app)?, format, r).await,
         Commands::Exercise(e) => body_cmd::run_exercise(&app_client(&app)?, format, e).await,
         Commands::Water(w) => body_cmd::run_water(&app_client(&app)?, format, w).await,
         Commands::Meals(m) => meal_cmd::run(&app_client(&app)?, format, m).await,
+        Commands::MealPlans(m) => meal_plan_cmd::run(&app_client(&app)?, format, m).await,
         Commands::Settings(s) => misc_cmd::run_settings(&app_client(&app)?, format, s).await,
         Commands::Notifications(n) => {
             misc_cmd::run_notifications(&app_client(&app)?, format, n).await

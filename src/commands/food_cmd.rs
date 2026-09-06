@@ -43,6 +43,54 @@ pub async fn run(client: &FsClient, format: OutputFormat, args: FoodsArgs) -> Re
             let (human, plain) = render_food_get(&v);
             emit(format, human.trim_end(), plain.trim_end(), &v)
         }
+        FoodsAction::Create {
+            name,
+            serving_size,
+            metric_serving,
+            brand,
+            manufacturer_type,
+            tags,
+            is_salt,
+            barcode,
+            barcode_type,
+            calories,
+            protein,
+            carbs,
+            fat,
+            fiber,
+            sugar,
+            sodium,
+        } => {
+            let num = |v: Option<f64>| v.map(|n| n.to_string()).unwrap_or_default();
+            let food = crate::api::CustomFood {
+                serving_type: String::new(),
+                serving_size,
+                calories: num(calories),
+                total_fat: num(fat),
+                saturated_fat: String::new(),
+                cholesterol: String::new(),
+                sodium: num(sodium),
+                potassium: String::new(),
+                carbohydrate: num(carbs),
+                fiber: num(fiber),
+                sugar: num(sugar),
+                protein: num(protein),
+                metric_serving_size: metric_serving,
+                calcium: String::new(),
+                iron: String::new(),
+                vitamin_a: String::new(),
+                vitamin_c: String::new(),
+                manufacturer_type,
+                manufacturer_name: brand,
+                product_name: name,
+                tags,
+                is_salt,
+                barcode,
+                barcode_type,
+            };
+            let v = client.food_create(&food).await?;
+            emit(format, "food created", "OK", &v)
+        }
     }
 }
 

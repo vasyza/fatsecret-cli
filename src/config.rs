@@ -31,6 +31,17 @@ pub const USER_DETAILS_URL_DEFAULT: &str =
     "https://app.ftscrt.com/api/user/v3/user-account-details";
 pub const CHANGE_USERNAME_URL_DEFAULT: &str =
     "https://app.ftscrt.com/api/account/v1/change-user-name";
+pub const FEED_ADD_BLOCK_URL_DEFAULT: &str = "https://app.ftscrt.com/api/feed/v1/add-user-block";
+pub const LEARNING_COURSE_BOOKMARK_SAVE_URL_DEFAULT: &str =
+    "https://app.ftscrt.com/api/user-learning/v1/user/bookmarks/guided-course/save";
+pub const LEARNING_COURSE_BOOKMARK_DELETE_URL_DEFAULT: &str =
+    "https://app.ftscrt.com/api/user-learning/v1/user/bookmarks/guided-course/delete";
+pub const LEARNING_LESSON_BOOKMARK_SAVE_URL_DEFAULT: &str =
+    "https://app.ftscrt.com/api/user-learning/v1/user/bookmarks/lesson/save";
+pub const LEARNING_LESSON_BOOKMARK_DELETE_URL_DEFAULT: &str =
+    "https://app.ftscrt.com/api/user-learning/v1/user/bookmarks/lesson/delete";
+pub const LEARNING_LESSON_PROGRESS_SAVE_URL_DEFAULT: &str =
+    "https://app.ftscrt.com/api/user-learning/v1/user/progress/lesson/save";
 pub const SERVER_BASE_DEFAULT: &str = "https://android.fatsecret.com/android/";
 pub const APP_VERSION_DEFAULT: &str = "11.8.0.5";
 pub const DEVICE_MODEL_DEFAULT: &str = "android";
@@ -63,6 +74,18 @@ pub struct AppConfig {
     pub user_details_url: String,
     #[serde(default = "default_change_username_url")]
     pub change_username_url: String,
+    #[serde(default = "default_feed_add_block_url")]
+    pub feed_add_block_url: String,
+    #[serde(default = "default_learning_course_bookmark_save_url")]
+    pub learning_course_bookmark_save_url: String,
+    #[serde(default = "default_learning_course_bookmark_delete_url")]
+    pub learning_course_bookmark_delete_url: String,
+    #[serde(default = "default_learning_lesson_bookmark_save_url")]
+    pub learning_lesson_bookmark_save_url: String,
+    #[serde(default = "default_learning_lesson_bookmark_delete_url")]
+    pub learning_lesson_bookmark_delete_url: String,
+    #[serde(default = "default_learning_lesson_progress_save_url")]
+    pub learning_lesson_progress_save_url: String,
     #[serde(default = "default_server_base")]
     pub server_base: String,
     #[serde(default = "default_device_model")]
@@ -113,6 +136,24 @@ fn default_user_details_url() -> String {
 fn default_change_username_url() -> String {
     CHANGE_USERNAME_URL_DEFAULT.to_string()
 }
+fn default_feed_add_block_url() -> String {
+    FEED_ADD_BLOCK_URL_DEFAULT.to_string()
+}
+fn default_learning_course_bookmark_save_url() -> String {
+    LEARNING_COURSE_BOOKMARK_SAVE_URL_DEFAULT.to_string()
+}
+fn default_learning_course_bookmark_delete_url() -> String {
+    LEARNING_COURSE_BOOKMARK_DELETE_URL_DEFAULT.to_string()
+}
+fn default_learning_lesson_bookmark_save_url() -> String {
+    LEARNING_LESSON_BOOKMARK_SAVE_URL_DEFAULT.to_string()
+}
+fn default_learning_lesson_bookmark_delete_url() -> String {
+    LEARNING_LESSON_BOOKMARK_DELETE_URL_DEFAULT.to_string()
+}
+fn default_learning_lesson_progress_save_url() -> String {
+    LEARNING_LESSON_PROGRESS_SAVE_URL_DEFAULT.to_string()
+}
 fn default_server_base() -> String {
     SERVER_BASE_DEFAULT.to_string()
 }
@@ -139,6 +180,12 @@ impl Default for AppConfig {
             reset_url: default_reset_url(),
             user_details_url: default_user_details_url(),
             change_username_url: default_change_username_url(),
+            feed_add_block_url: default_feed_add_block_url(),
+            learning_course_bookmark_save_url: default_learning_course_bookmark_save_url(),
+            learning_course_bookmark_delete_url: default_learning_course_bookmark_delete_url(),
+            learning_lesson_bookmark_save_url: default_learning_lesson_bookmark_save_url(),
+            learning_lesson_bookmark_delete_url: default_learning_lesson_bookmark_delete_url(),
+            learning_lesson_progress_save_url: default_learning_lesson_progress_save_url(),
             server_base: default_server_base(),
             device_model: default_device_model(),
             app_version: default_app_version(),
@@ -201,6 +248,24 @@ impl AppConfig {
         if let Ok(v) = std::env::var("FATSECRET_CHANGE_USERNAME_URL") {
             cfg.change_username_url = v;
         }
+        if let Ok(v) = std::env::var("FATSECRET_FEED_ADD_BLOCK_URL") {
+            cfg.feed_add_block_url = v;
+        }
+        if let Ok(v) = std::env::var("FATSECRET_LEARNING_COURSE_BOOKMARK_SAVE_URL") {
+            cfg.learning_course_bookmark_save_url = v;
+        }
+        if let Ok(v) = std::env::var("FATSECRET_LEARNING_COURSE_BOOKMARK_DELETE_URL") {
+            cfg.learning_course_bookmark_delete_url = v;
+        }
+        if let Ok(v) = std::env::var("FATSECRET_LEARNING_LESSON_BOOKMARK_SAVE_URL") {
+            cfg.learning_lesson_bookmark_save_url = v;
+        }
+        if let Ok(v) = std::env::var("FATSECRET_LEARNING_LESSON_BOOKMARK_DELETE_URL") {
+            cfg.learning_lesson_bookmark_delete_url = v;
+        }
+        if let Ok(v) = std::env::var("FATSECRET_LEARNING_LESSON_PROGRESS_SAVE_URL") {
+            cfg.learning_lesson_progress_save_url = v;
+        }
         if let Ok(v) = std::env::var("FATSECRET_SERVER_BASE") {
             cfg.server_base = v;
         }
@@ -258,5 +323,32 @@ mod tests {
         let cfg = AppConfig::resolve(None).unwrap_or_default();
         assert_eq!(cfg.device_model, "Pixel");
         unsafe { std::env::remove_var("FATSECRET_DEVICE_MODEL") };
+    }
+
+    #[test]
+    fn new_write_urls_default() {
+        let _guard = ENV_LOCK.lock();
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.feed_add_block_url, FEED_ADD_BLOCK_URL_DEFAULT);
+        assert_eq!(
+            cfg.learning_course_bookmark_save_url,
+            LEARNING_COURSE_BOOKMARK_SAVE_URL_DEFAULT
+        );
+        assert_eq!(
+            cfg.learning_course_bookmark_delete_url,
+            LEARNING_COURSE_BOOKMARK_DELETE_URL_DEFAULT
+        );
+        assert_eq!(
+            cfg.learning_lesson_bookmark_save_url,
+            LEARNING_LESSON_BOOKMARK_SAVE_URL_DEFAULT
+        );
+        assert_eq!(
+            cfg.learning_lesson_bookmark_delete_url,
+            LEARNING_LESSON_BOOKMARK_DELETE_URL_DEFAULT
+        );
+        assert_eq!(
+            cfg.learning_lesson_progress_save_url,
+            LEARNING_LESSON_PROGRESS_SAVE_URL_DEFAULT
+        );
     }
 }

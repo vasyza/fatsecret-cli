@@ -13,9 +13,10 @@ fn help_lists_subcommands() {
         .stdout(predicate::str::contains("recipes"))
         .stdout(predicate::str::contains("diary"))
         .stdout(predicate::str::contains("weight"))
-        .stdout(predicate::str::contains("exercise"))
+        .stdout(predicate::str::contains("rdi"))
         .stdout(predicate::str::contains("water"))
         .stdout(predicate::str::contains("meals"))
+        .stdout(predicate::str::contains("meal-plans"))
         .stdout(predicate::str::contains("settings"))
         .stdout(predicate::str::contains("feed"))
         .stdout(predicate::str::contains("learning"))
@@ -213,4 +214,53 @@ fn water_log_help_renders() {
         .assert()
         .success()
         .stdout(predicate::str::contains("goal-ml"));
+}
+
+#[test]
+fn new_write_commands_help_renders() {
+    let screens: &[(&[&str], &str)] = &[
+        (&["rdi", "--help"], "show"),
+        (&["rdi", "save", "--help"], "--weight-kg"),
+        (&["feed", "block", "--help"], "user"),
+        (&["learning", "bookmark-course", "--help"], "course"),
+        (&["learning", "unbookmark-course", "--help"], "course"),
+        (&["learning", "bookmark-lesson", "--help"], "lesson"),
+        (&["learning", "unbookmark-lesson", "--help"], "lesson"),
+        (&["learning", "complete-lesson", "--help"], "lesson"),
+        (&["foods", "create", "--help"], "--metric-serving"),
+        (&["recipes", "create", "--help"], "--prep-time"),
+        (&["recipes", "save", "--help"], "--step"),
+        (&["recipes", "rm", "--help"], "Usage"),
+        (&["recipes", "add-ingredient", "--help"], "--recipe-id"),
+        (&["recipes", "rm-ingredient", "--help"], "--item-id"),
+        (&["meals", "duplicate", "--help"], "--title"),
+        (&["meal-plans", "--help"], "save"),
+        (&["meal-plans", "save", "--help"], "--entry"),
+        (&["meal-plans", "schedule", "--help"], "--insert"),
+    ];
+    for (args, marker) in screens {
+        Command::cargo_bin("fatsecret-cli")
+            .unwrap()
+            .args(*args)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(*marker));
+    }
+}
+
+#[test]
+fn new_write_bad_input_fails_offline() {
+    // Pure validation happens before any network touch.
+    Command::cargo_bin("fatsecret-cli")
+        .unwrap()
+        .env("XDG_CONFIG_HOME", "/nonexistent-xdg-fatsecret-cli")
+        .env(
+            "FATSECRET_CREDENTIALS",
+            "/nonexistent-creds-fatsecret-cli.json",
+        )
+        .env_remove("FATSECRET_SERVER_ID")
+        .args(["meal-plans", "save", "--entry", "garbage"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("bad --entry"));
 }

@@ -67,5 +67,16 @@ pub async fn run(client: &FsClient, format: OutputFormat, args: MealArgs) -> Res
             let (human, plain) = render_meals(&v);
             emit(format, human.trim_end(), plain.trim_end(), &v)
         }
+        MealAction::Duplicate {
+            id,
+            title,
+            description,
+            meal_types,
+        } => {
+            let v = client
+                .meal_duplicate(id, &title, &description, &meal_types)
+                .await?;
+            emit(format, "meal duplicated", "OK", &v)
+        }
     }
 }
