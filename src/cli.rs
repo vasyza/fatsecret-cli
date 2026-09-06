@@ -293,8 +293,12 @@ pub struct ExerciseArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum ExerciseAction {
-    /// Show today's exercise entries
-    Day,
+    /// Show exercise entries for a day (default today)
+    Day {
+        /// Date YYYY-MM-DD (default today)
+        #[arg(long)]
+        date: Option<String>,
+    },
     /// List activity types
     Types,
     /// Log an activity

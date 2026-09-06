@@ -576,10 +576,11 @@ impl FsClient {
     fn legacy(&self, page: &str) -> String {
         format!("{}{page}", self.app.server_base)
     }
-    /// Saved meals list: `SavedMealsAndroidPage.aspx?meal={ordinal}`.
+    /// Saved meals list: POST `SavedMealsAndroidPage.aspx` with
+    /// `{meal: <local ordinal>}` (form body like the app; GET reads empty).
     pub async fn meals_list(&self, meal_ordinal: i64) -> Result<Value> {
         let url = self.legacy("SavedMealsAndroidPage.aspx");
-        self.get_query(&url, &[("meal", &meal_ordinal.to_string())])
+        self.post_form(&url, &[("meal", &meal_ordinal.to_string())])
             .await
     }
 
@@ -790,10 +791,11 @@ impl FsClient {
         .await
     }
 
-    /// Exercise day: authed GET `ActivityDayAndroidPage.aspx?fl=3`.
-    pub async fn exercise_day(&self) -> Result<Value> {
+    /// Exercise day: POST `ActivityDayAndroidPage.aspx` with `{fl: 3}`.
+    /// `days` selects the civil day (same page + `dt`, like the diary).
+    pub async fn exercise_day(&self, days: i64) -> Result<Value> {
         let url = format!("{}ActivityDayAndroidPage.aspx", self.app.server_base);
-        self.get_query(&url, &[("fl", "3")]).await
+        self.post_form_dated(&url, days, &[("fl", "3")]).await
     }
 
     /// Activity types: authed GET `ActivitiesAndroidPage.aspx`, no params
@@ -820,6 +822,15 @@ impl FsClient {
             ("mins", mins.as_str()),
             ("fl", "2"),
         ];
+        // App-equivalent locale trio + userid (addLangParams + O7).
+        query.push(("lang", self.app.language_locale.as_str()));
+        query.push(("mkt", self.app.market_locale.as_str()));
+        query.push(("device", self.app.device_model.as_str()));
+        let device_id;
+        if let Some(id) = &self.app.device_id {
+            device_id = id.clone();
+            query.push(("userid", device_id.as_str()));
+        }
         let kcal_str;
         if let Some(k) = kcal {
             kcal_str = k.to_string();

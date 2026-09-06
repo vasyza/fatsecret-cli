@@ -92,9 +92,9 @@ The status below distinguishes implemented commands from observed live behavior.
 | Authentication | Login, local status/logout, registration, password recovery | Login and reset-email delivery have been checked live. Registration and reset completion are implemented, but not established as fully verified workflows. No social-login flow. |
 | Foods | Search, details, popular servings, dietary-preference types/votes, barcode lookup | Search, details, popular servings, types, and barcode lookup have live-check evidence. Vote requests are implemented; this does not establish every type/value combination. |
 | Recipes | Search, details, categories, cookbook search/count | Search, details, categories, and count have been checked live. Cookbook search is implemented without the same verification claim. |
-| Food diary | Current-day read, add, delete by known ID | Add/delete have been checked live, including mobile-app visibility. No reliable entry-ID listing, historical day lookup, month view, or copy command. Date caveats apply. |
+| Food diary | Day read with history, add, delete and copy | Add/delete/copy verified live. Day lists entry IDs, macros and totals. No month view. Date caveats apply. |
 | Weight | Record current weight and goal | A write was accepted live. No history or date selector. |
-| Exercise | Current day, activity types, activity logging | Reads have been checked live. Logging was rejected by the server. |
+| Exercise | Current day (with `--date` history), activity types, activity logging | Logging verified live; the request needs the app locale trio (`lang/mkt/device` + `userid`), now sent by the client. |
 | Water | Current-day read and intake logging | Premium-gated: the account in live checks is `registered non-premium` and the server rejects both operations (299 `Could not save`). Verified via web sources that water tracking is a Premium feature. |
 | Saved meals | List, details, quick picks, meal/item writes, log to diary | Reads have been checked live. Create/delete verified live over form POST (app transport); other writes share the transport but are unproven. |
 | Account/settings | Details, account settings, rename, attributes, locale | Read commands have live-check evidence. Rename is implemented and changes the account immediately if accepted. General settings editing is absent. |
@@ -198,9 +198,9 @@ Search pages are zero-based. `--market` applies only to cookbook count; it is no
 | Command | Behavior and defaults |
 | --- | --- |
 | `weight log KG [--goal-kg KG]` | Record weight in kilograms; goal behavior is described in the quick start. |
-| `exercise day` | Read the current exercise day. |
+| `exercise day [--date YYYY-MM-DD]` | Read the exercise day (history supported). |
 | `exercise types` | List activity type IDs. |
-| `exercise log --type-id ID --mins MINUTES [--kcal NUMBER] [--description TEXT]` | Submit activity duration, optional energy, and a note. Without `--kcal`, the request leaves estimation to the server. Known live rejection. |
+| `exercise log --type-id ID --mins MINUTES [--kcal NUMBER] [--description TEXT]` | Submit activity duration, optional energy, and a note. Without `--kcal`, the request leaves estimation to the server. Verified live. |
 | `water day` | Read current-day water data. Requires Premium; non-premium accounts get 299 `Could not save`. |
 | `water log ML [--goal-ml 2000]` | Submit an intake increment in milliliters and a daily goal. Requires Premium; non-premium accounts get 299 `Could not save`. |
 

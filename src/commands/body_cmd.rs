@@ -103,8 +103,9 @@ pub async fn run_exercise(
     args: ExerciseArgs,
 ) -> Result<()> {
     match args.action {
-        ExerciseAction::Day => {
-            let v = client.exercise_day().await?;
+        ExerciseAction::Day { date } => {
+            let (_, recorded) = crate::commands::diary_cmd::recorded_date(&date)?;
+            let v = client.exercise_day(recorded).await?;
             let (human, plain) = render_exercise(&v);
             emit(format, human.trim_end(), plain.trim_end(), &v)
         }
