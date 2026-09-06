@@ -6,8 +6,8 @@ rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 description = "Terminal client mirroring the FatSecret mobile app"
 repository = "https://github.com/vasyza/fatsecret-cli"
+homepage = "https://github.com/vasyza/fatsecret-cli"
 readme = "README.md"
-keywords = ["fatsecret", "calorie", "diet", "cli", "health"]
 
 [lib]
 name = "fatsecret_cli"
@@ -44,3 +44,8 @@ predicates = "3"
 lto = true
 codegen-units = 1
 strip = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
